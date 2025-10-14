@@ -1,1 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScrollThroughTime - Historical Map Reader</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.css" />
+    <style>
+        #map-container {
+            transition: all 0.5s ease;
+        }
+        .timeline-marker {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background-color: rgba(255, 0, 0, 0.7);
+            z-index: 1000;
+        }
+        .location-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            border: 2px solid white;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            z-index: 1001;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-md fixed w-full z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i data-feather="map" class="text-red-600 mr-2"></i>
+                    <span class="text-xl font-bold text-gray-800">ScrollThroughTime</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="preview.html" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition flex items-center">
+                        <i data-feather="external-link" class="mr-2"></i> Preview Mode
+                    </a>
+                    <button id="upload-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center">
+                        <i data-feather="upload" class="mr-2"></i> Upload PDF
+                    </button>
+                    <input type="file" id="pdf-input" accept=".pdf" class="hidden">
+</div>
+</div>
+        </div>
+    </nav>
+    <!-- Main Content -->
+    <div class="pt-16 pb-8 flex flex-col md:flex-row">
+        <!-- PDF Viewer -->
+        <div class="w-full md:w-1/2 h-screen overflow-y-auto p-4 bg-white shadow-lg" id="pdf-viewer">
+            <div class="text-center py-20 text-gray-500" id="pdf-placeholder">
+                <i data-feather="file" class="w-12 h-12 mx-auto mb-4"></i>
+                <h3 class="text-xl font-medium">No PDF Loaded</h3>
+                <p class="mt-2">Upload a PDF to begin your historical journey</p>
+                <p class="text-red-500 text-sm hidden" id="upload-error"></p>
+            </div>
+<div id="pdf-container" class="hidden"></div>
+        </div>
+        <!-- Map Viewer -->
+        <div class="w-full md:w-1/2 h-screen sticky top-16" id="map-container">
+<div id="map" class="h-full w-full"></div>
+            <div id="timeline-marker" class="timeline-marker hidden"></div>
+            <div id="location-dot" class="location-dot hidden"></div>
+        </div>
+    </div>
 
+    <!-- Timeline Control -->
+    <div class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-3 rounded-lg shadow-xl flex items-center space-x-4 z-10">
+        <button id="prev-marker" class="p-2 rounded-full bg-gray-200 hover:bg-gray-300">
+            <i data-feather="chevron-left"></i>
+        </button>
+        <div class="w-64 h-2 bg-gray-200 rounded-full relative" id="timeline-track">
+            <div class="absolute top-0 left-0 h-full bg-blue-600 rounded-full" id="timeline-progress"></div>
+        </div>
+        <button id="next-marker" class="p-2 rounded-full bg-gray-200 hover:bg-gray-300">
+            <i data-feather="chevron-right"></i>
+        </button>
+        <div class="ml-4 text-sm text-gray-700" id="time-indicator">
+            <span id="current-year">--</span>
+        </div>
+    </div>
+
+    <script>
+        // Initialize map with user's location if available
+        const map = L.map('map');
+        
+        // Try to get user's location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLocation = [position.coords.latitude, position.coords.longitude];
+                    map.setView(userLocation, 6);
+                    L.marker(userLocation)
+                        .addTo(map)
+                        .bindPopup("Your Location")
+                        .openPopup();
+                },
+                (error) => {
+                    console.error("Geolocation error:", error);
+                    map.setView([30, 0], 2); // Default view if location denied
+                },
+                {enableHighAccuracy: true, timeout: 5000, maximumAge: 0}
+            );
+        } else {
+            map.setView([30, 0], 2); // Default view if no geolocation support
+        }
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // PDF.js configuration
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
+
+        // Demo data - would normally come from PDF analysis or user input
+        const timelineData = [
+            { page: 1, year: 1066, location: [51.1789, -1.8262], event: "Norman Conquest of England" },
+            { page: 3, year: 1215, location: [51.5165, -0.0956], event: "Signing of Magna Carta" },
+            { page: 5, year: 1346, location: [50.7258, 2.2583], event: "Battle of Crécy" },
+            { page: 7, year: 1415, location: [50.4536, 2.1418], event: "Battle of Agincourt" },
+            { page: 9, year: 1453, location: [41.0082, 28.9784], event: "Fall of Constantinople" }
+        ];
+        // UI Elements
+        const pdfInput = document.getElementById('pdf-input');
+        const uploadBtn = document.getElementById('upload-btn');
+        const pdfContainer = document.getElementById('pdf-container');
+        const pdfPlaceholder = document.getElementById('pdf-placeholder');
+        const timelineMarker = document.getElementById('timeline-marker');
+        const locationDot = document.getElementById('location-dot');
+        const timelineProgress = document.getElementById('timeline-progress');
+        const currentYear = document.getElementById('current-year');
+        const prevMarkerBtn = document.getElementById('prev-marker');
+        const nextMarkerBtn = document.getElementById('next-marker');
+        const timelineTrack = document.getElementById('timeline-track');
+        const uploadError = document.getElementById('upload-error');
+        // Event listeners
+        uploadBtn.addEventListener('click', () => {
+            pdfInput.click();
+        });
+
+        pdfInput.addEventListener('change', async function(e) {
+            if (!e.target.files || e.target.files.length === 0) {
+                return;
+            }
+
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Clear previous errors
+            uploadError.textContent = '';
+            uploadError.classList.add('hidden');
+
+            // Validate file type
+            if (file.type !== 'application/pdf') {
+                uploadError.textContent = 'Please select a valid PDF file';
+                uploadError.classList.remove('hidden');
+                return;
+            }
+
+            // Validate file size (20MB max)
+            if (file.size > 20 * 1024 * 1024) {
+                uploadError.textContent = 'File size too large (max 20MB)';
+                uploadError.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                pdfPlaceholder.classList.add('hidden');
+                pdfContainer.classList.remove('hidden');
+                pdfContainer.innerHTML = '<div class="text-center py-20"><i data-feather="loader" class="animate-spin w-12 h-12 mx-auto"></i><p class="mt-4">Loading PDF...</p></div>';
+                feather.replace();
+
+                const fileReader = new FileReader();
+                
+                fileReader.onload = async function() {
+                    try {
+                        const typedArray = new Uint8Array(this.result);
+                        const pdf = await pdfjsLib.getDocument(typedArray).promise;
+
+                        // Clear loading state
+                        pdfContainer.innerHTML = '';
+                        // For demo, render first 10 pages
+                        const numPages = Math.min(pdf.numPages, 10);
+                        
+                        for (let i = 1; i <= numPages; i++) {
+                            try {
+                                const page = await pdf.getPage(i);
+                                const viewport = page.getViewport({ scale: 1.5 });
+                                const canvas = document.createElement('canvas');
+                                const context = canvas.getContext('2d');
+                                canvas.height = viewport.height;
+                                canvas.width = viewport.width;
+                                
+                                const pageDiv = document.createElement('div');
+                                pageDiv.className = 'pdf-page mb-4 relative';
+                                pageDiv.dataset.pageNumber = i;
+                                pageDiv.appendChild(canvas);
+                                
+                                // Add markers if exists in timeline data
+                                const timelineItem = timelineData.find(item => item.page === i);
+                                if (timelineItem) {
+                                    const marker = document.createElement('div');
+                                    marker.className = 'absolute top-0 left-0 w-full h-1 bg-red-500';
+                                    marker.dataset.year = timelineItem.year;
+                                    marker.dataset.location = timelineItem.location;
+                                    pageDiv.appendChild(marker);
+                                }
+                                
+                                pdfContainer.appendChild(pageDiv);
+                                await page.render({
+                                    canvasContext: context,
+                                    viewport: viewport
+                                }).promise;
+                            } catch (err) {
+                                console.error(`Error rendering page ${i}:`, err);
+                            }
+                        }
+
+                        loadDemoData();
+                        setupScrollEvents();
+                    } catch (error) {
+                        console.error('PDF processing error:', error);
+                        uploadError.textContent = 'Error loading PDF. Please try another file.';
+                        uploadError.classList.remove('hidden');
+                        pdfPlaceholder.classList.remove('hidden');
+                        pdfContainer.classList.add('hidden');
+                    }
+                };
+
+                fileReader.onerror = function() {
+                    uploadError.textContent = 'Error reading file. Please try again.';
+                    uploadError.classList.remove('hidden');
+                    pdfPlaceholder.classList.remove('hidden');
+                    pdfContainer.classList.add('hidden');
+                };
+
+                fileReader.readAsArrayBuffer(file);
+
+            } catch (error) {
+                console.error('PDF upload error:', error);
+                uploadError.textContent = 'An unexpected error occurred. Please try again.';
+                uploadError.classList.remove('hidden');
+                pdfPlaceholder.classList.remove('hidden');
+                pdfContainer.classList.add('hidden');
+            }
+        });
+// For demo purposes - would normally analyze PDF for historical events
+        function loadDemoData() {
+            timelineData.forEach(item => {
+                // Create markers on the map
+                L.marker(item.location).addTo(map)
+                    .bindPopup(`<b>${item.year}</b><br>${item.event}`);
+            });
+        }
+// Setup scroll events to update map
+        function setupScrollEvents() {
+            const pdfViewer = document.getElementById('pdf-viewer');
+            const pages = document.querySelectorAll('.pdf-page');
+            
+            pdfViewer.addEventListener('scroll', () => {
+                const scrollPosition = pdfViewer.scrollTop + pdfViewer.clientHeight / 2;
+                let activePage = 1;
+                
+                // Find which page is currently at the center of the viewport
+                pages.forEach(page => {
+                    const pageTop = page.offsetTop;
+                    const pageBottom = pageTop + page.offsetHeight;
+                    
+                    if (scrollPosition >= pageTop && scrollPosition <= pageBottom) {
+                        activePage = parseInt(page.dataset.pageNumber);
+                    }
+                });
+                
+                // Find the timeline item for this page
+                const timelineItem = timelineData.find(item => item.page === activePage);
+                if (timelineItem) {
+                    // Update map view
+                    map.flyTo(timelineItem.location, 6, {
+                        duration: 1
+                    });
+                    
+                    // Show timeline marker
+                    timelineMarker.classList.remove('hidden');
+                    locationDot.classList.remove('hidden');
+                    
+                    // Position the location dot
+                    const point = map.latLngToContainerPoint(timelineItem.location);
+                    locationDot.style.left = `${point.x}px`;
+                    locationDot.style.top = `${point.y}px`;
+                    
+                    // Update year display
+                    currentYear.textContent = timelineItem.year;
+                    
+                    // Update timeline progress
+                    const progress = (activePage / 10) * 100;
+                    timelineProgress.style.width = `${progress}%`;
+                } else {
+                    timelineMarker.classList.add('hidden');
+                    locationDot.classList.add('hidden');
+                    currentYear.textContent = '--';
+                }
+            });
+        }
+        // Initialize
+        feather.replace();
+
+        // Improved PDF error handling
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
+// Handle mobile viewport height
+        function setViewportHeight() {
+            let vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        }
+        
+        setViewportHeight();
+        window.addEventListener('resize', setViewportHeight);
+</script>
+</body>
+</html>
