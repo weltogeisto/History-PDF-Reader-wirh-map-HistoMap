@@ -10,6 +10,11 @@
     <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.js"></script>
+    <!-- Leaflet.draw for tracing on the map -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <!-- jsPDF for generating a small test PDF in-browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.css" />
     <style>
         #map-container {
@@ -52,6 +57,28 @@
                     <button id="upload-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center">
                         <i data-feather="upload" class="mr-2"></i> Upload PDF
                     </button>
+                    <button id="generate-test-pdf" class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition flex items-center">
+                        <i data-feather="file-text" class="mr-2"></i> Generate Test PDF
+                    </button>
+                    <button id="auto-save-btn" class="px-3 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 transition flex items-center text-sm" title="Toggle auto-save of traces">
+                        AutoSave: On
+                    </button>
+                        <button id="trace-toggle" class="px-3 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition flex items-center" title="Toggle trace mode">
+                            <i data-feather="edit-3" class="mr-2"></i><span id="trace-toggle-text">Trace: Off</span>
+                        </button>
+                        <select id="trace-mode-select" class="px-2 py-2 bg-white border rounded-md text-sm" title="Single page or spread tracing">
+                            <option value="single">Single Page</option>
+                            <option value="spread">Spread (double page)</option>
+                        </select>
+                        <!-- Page management UI -->
+                        <select id="page-select" class="px-2 py-2 bg-white border rounded-md text-sm" title="Go to page">
+                            <option value="1">Page 1</option>
+                        </select>
+                        <button id="clear-page-btn" class="px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 text-sm" title="Clear traces for selected page">Clear Page</button>
+                        <button id="export-page-btn" class="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm" title="Export traces for selected page">Export Page</button>
+                        <button id="export-all-btn" class="px-3 py-2 bg-indigo-700 text-white rounded-md hover:bg-indigo-800 text-sm" title="Export traces for all pages">Export All</button>
+                        <button id="import-btn" class="px-3 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 text-sm" title="Import GeoJSON to current page">Import</button>
+                        <input type="file" id="import-input" accept="application/json,.geojson" class="hidden">
                     <input type="file" id="pdf-input" accept=".pdf" class="hidden">
 </div>
 </div>
@@ -96,7 +123,7 @@
     <script>
         // Initialize map with user's location if available
         const map = L.map('map');
-        
+
         // Try to get user's location
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -117,7 +144,8 @@
         } else {
             map.setView([30, 0], 2); // Default view if no geolocation support
         }
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
@@ -132,7 +160,25 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             { page: 7, year: 1415, location: [50.4536, 2.1418], event: "Battle of Agincourt" },
             { page: 9, year: 1453, location: [41.0082, 28.9784], event: "Fall of Constantinople" }
         ];
-        // UI Elements
+
+    // Page-specific structures
+    let numPages = 0; // actual pdf.numPages
+    let pdfDoc = null; // PDF.js document for lazy-loading
+    let renderCap = 50; // number of pages we will create placeholders for by default
+    const pageTraces = {}; // page -> L.FeatureGroup
+    const pageMarkers = {}; // page -> L.FeatureGroup
+    let activePage = 1;
+
+    // Drawing / tracing
+    const drawnItems = L.featureGroup(); // will act as the editable group for current page(s)
+    let drawControl = null;
+    let traceModeEnabled = false;
+    let autoSave = true; // auto-save traces to localStorage
+
+        // Mode: 'single' or 'spread'
+        let traceDisplayMode = 'single';
+
+    // UI Elements
         const pdfInput = document.getElementById('pdf-input');
         const uploadBtn = document.getElementById('upload-btn');
         const pdfContainer = document.getElementById('pdf-container');
@@ -145,9 +191,55 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         const nextMarkerBtn = document.getElementById('next-marker');
         const timelineTrack = document.getElementById('timeline-track');
         const uploadError = document.getElementById('upload-error');
+        const traceToggle = document.getElementById('trace-toggle');
+        const traceToggleText = document.getElementById('trace-toggle-text');
+        const traceModeSelect = document.getElementById('trace-mode-select');
+    const pageSelect = document.getElementById('page-select');
+    const clearPageBtn = document.getElementById('clear-page-btn');
+    const exportPageBtn = document.getElementById('export-page-btn');
+    const exportAllBtn = document.getElementById('export-all-btn');
+    const importBtn = document.getElementById('import-btn');
+    const importInput = document.getElementById('import-input');
+
+        // Initialize drawnItems (not added to map permanently)
+        // drawnItems will temporarily hold newly drawn layers before they are assigned to a page
+
         // Event listeners
         uploadBtn.addEventListener('click', () => {
             pdfInput.click();
+        });
+
+        // Generate a small 2-page test PDF using jsPDF
+        const generateTestBtn = document.getElementById('generate-test-pdf');
+        if (generateTestBtn) {
+            generateTestBtn.addEventListener('click', () => {
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF();
+                    doc.setFontSize(18);
+                    doc.text('ScrollThroughTime — Test PDF', 20, 30);
+                    doc.setFontSize(12);
+                    doc.text('This is page 1. Use this PDF to test lazy-loading and tracing.', 20, 50);
+                    doc.addPage();
+                    doc.text('Page 2 — another page for scrolling', 20, 30);
+                    doc.save('scrollthroughtime-test.pdf');
+                } catch (err) {
+                    console.error('jsPDF generate error', err);
+                    alert('Failed to generate test PDF (jsPDF not available)');
+                }
+            });
+        }
+
+        traceToggle.addEventListener('click', () => {
+            traceModeEnabled = !traceModeEnabled;
+            if (traceModeEnabled) enableTraceMode(); else disableTraceMode();
+            traceToggleText.textContent = traceModeEnabled ? 'Trace: On' : 'Trace: Off';
+        });
+
+        traceModeSelect.addEventListener('change', (e) => {
+            traceDisplayMode = e.target.value; // 'single' or 'spread'
+            // refresh map display for the active page(s)
+            updateMapForActivePage();
         });
 
         pdfInput.addEventListener('change', async function(e) {
@@ -189,47 +281,129 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         const typedArray = new Uint8Array(this.result);
                         const pdf = await pdfjsLib.getDocument(typedArray).promise;
 
-                        // Clear loading state
+                        // Lazy-load rendering: create placeholders for pages and render on demand
                         pdfContainer.innerHTML = '';
-                        // For demo, render first 10 pages
-                        const numPages = Math.min(pdf.numPages, 10);
-                        
-                        for (let i = 1; i <= numPages; i++) {
-                            try {
-                                const page = await pdf.getPage(i);
-                                const viewport = page.getViewport({ scale: 1.5 });
-                                const canvas = document.createElement('canvas');
-                                const context = canvas.getContext('2d');
-                                canvas.height = viewport.height;
-                                canvas.width = viewport.width;
-                                
-                                const pageDiv = document.createElement('div');
-                                pageDiv.className = 'pdf-page mb-4 relative';
-                                pageDiv.dataset.pageNumber = i;
-                                pageDiv.appendChild(canvas);
-                                
-                                // Add markers if exists in timeline data
-                                const timelineItem = timelineData.find(item => item.page === i);
-                                if (timelineItem) {
-                                    const marker = document.createElement('div');
-                                    marker.className = 'absolute top-0 left-0 w-full h-1 bg-red-500';
-                                    marker.dataset.year = timelineItem.year;
-                                    marker.dataset.location = timelineItem.location;
-                                    pageDiv.appendChild(marker);
+                        pdfDoc = pdf;
+                        numPages = pdf.numPages;
+                        // allow a larger cap for placeholders but avoid huge DOMs
+                        renderCap = Math.min(numPages, 200);
+
+                        // Reset page structures
+                        for (let k in pageTraces) delete pageTraces[k];
+                        for (let k in pageMarkers) delete pageMarkers[k];
+
+                        // IntersectionObserver to render pages when they enter view
+                        const observer = new IntersectionObserver(async (entries, obs) => {
+                            for (const entry of entries) {
+                                if (entry.isIntersecting) {
+                                    const pageDiv = entry.target;
+                                    const idx = parseInt(pageDiv.dataset.pageNumber, 10);
+                                    try {
+                                        await renderPage(idx, pageDiv);
+                                    } catch (err) {
+                                        console.error('Error lazy-rendering page', idx, err);
+                                    }
+                                    obs.unobserve(pageDiv);
                                 }
-                                
-                                pdfContainer.appendChild(pageDiv);
-                                await page.render({
-                                    canvasContext: context,
-                                    viewport: viewport
-                                }).promise;
-                            } catch (err) {
-                                console.error(`Error rendering page ${i}:`, err);
                             }
+                        }, { root: document.getElementById('pdf-viewer'), rootMargin: '300px' });
+
+                        // create placeholders for pages up to renderCap
+                        for (let i = 1; i <= renderCap; i++) {
+                            const pageDiv = document.createElement('div');
+                            pageDiv.className = 'pdf-page mb-4 relative';
+                            pageDiv.dataset.pageNumber = i;
+                            pageDiv.innerHTML = `<div class="text-center py-20 text-gray-400">Page ${i} — loading when visible...</div>`;
+
+                            // placeholder marker bar if timeline data exists for this page
+                            const timelineItem = timelineData.find(item => item.page === i);
+                            if (timelineItem) {
+                                const marker = document.createElement('div');
+                                marker.className = 'absolute top-0 left-0 w-full h-1 bg-red-500';
+                                marker.dataset.year = timelineItem.year;
+                                marker.dataset.location = timelineItem.location;
+                                pageDiv.appendChild(marker);
+                            }
+
+                            // Initialize page containers for traces and markers
+                            pageTraces[i] = L.featureGroup();
+                            pageMarkers[i] = L.featureGroup();
+
+                            // load any saved traces from localStorage
+                            try { loadPageTracesFromStorage(i); } catch (err) { /* ignore */ }
+
+                            pdfContainer.appendChild(pageDiv);
+                            observer.observe(pageDiv);
                         }
 
+                        // Prepare demo markers (grouped by page)
                         loadDemoData();
+
+                        // Setup draw control (once)
+                        if (!drawControl) {
+                            // drawnItems will be the editable featureGroup for currently visible page traces
+                            drawnItems.addTo(map);
+                            drawControl = new L.Control.Draw({
+                                edit: { featureGroup: drawnItems },
+                                draw: {
+                                    polyline: true,
+                                    polygon: true,
+                                    marker: true,
+                                    rectangle: false,
+                                    circle: false,
+                                    circlemarker: false
+                                }
+                            });
+                        }
+
+                        // Wire draw created handler
+                        map.on(L.Draw.Event.CREATED, function (e) {
+                            const layer = e.layer;
+                            // Add to editable group (so it can be edited immediately)
+                            drawnItems.addLayer(layer);
+                            assignLayerToCurrentPage(layer);
+                            // autosave
+                            const pages = getPagesForActive();
+                            if (autoSave) pages.forEach(p => savePageTracesToStorage(p));
+                        });
+
+                        // When layers are edited, reflect edits to the pageTraces of active pages
+                        map.on(L.Draw.Event.EDITED, function (e) {
+                            // After edit, sync editable group to pageTraces for active pages
+                            const pages = getPagesForActive();
+                            pages.forEach(p => {
+                                // replace pageTraces[p] content with clones of drawnItems layers
+                                if (!pageTraces[p]) pageTraces[p] = L.featureGroup();
+                                pageTraces[p].clearLayers();
+                                drawnItems.getLayers().forEach(layer => {
+                                    // clone layer to avoid reference issues
+                                    const cloned = cloneLayer(layer);
+                                    pageTraces[p].addLayer(cloned);
+                                });
+                                if (autoSave) savePageTracesToStorage(p);
+                            });
+                        });
+
+                        // When layers are deleted via edit, sync as well
+                        map.on(L.Draw.Event.DELETED, function (e) {
+                            const pages = getPagesForActive();
+                            pages.forEach(p => {
+                                if (!pageTraces[p]) pageTraces[p] = L.featureGroup();
+                                // rebuild pageTraces[p] from drawnItems
+                                pageTraces[p].clearLayers();
+                                drawnItems.getLayers().forEach(layer => {
+                                    const cloned = cloneLayer(layer);
+                                    pageTraces[p].addLayer(cloned);
+                                });
+                                if (autoSave) savePageTracesToStorage(p);
+                            });
+                        });
+
                         setupScrollEvents();
+                        // populate page list UI
+                        populatePageSelect();
+                        // wire page UI buttons
+                        wirePageUiButtons();
                     } catch (error) {
                         console.error('PDF processing error:', error);
                         uploadError.textContent = 'Error loading PDF. Please try another file.';
@@ -256,69 +430,389 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 pdfContainer.classList.add('hidden');
             }
         });
-// For demo purposes - would normally analyze PDF for historical events
+
+        // For demo purposes - create markers grouped by page
         function loadDemoData() {
             timelineData.forEach(item => {
-                // Create markers on the map
-                L.marker(item.location).addTo(map)
-                    .bindPopup(`<b>${item.year}</b><br>${item.event}`);
+                const marker = L.marker(item.location).bindPopup(`<b>${item.year}</b><br>${item.event}`);
+                if (!pageMarkers[item.page]) pageMarkers[item.page] = L.featureGroup();
+                pageMarkers[item.page].addLayer(marker);
             });
         }
-// Setup scroll events to update map
-        function setupScrollEvents() {
-            const pdfViewer = document.getElementById('pdf-viewer');
-            const pages = document.querySelectorAll('.pdf-page');
-            
-            pdfViewer.addEventListener('scroll', () => {
-                const scrollPosition = pdfViewer.scrollTop + pdfViewer.clientHeight / 2;
-                let activePage = 1;
-                
-                // Find which page is currently at the center of the viewport
-                pages.forEach(page => {
-                    const pageTop = page.offsetTop;
-                    const pageBottom = pageTop + page.offsetHeight;
-                    
-                    if (scrollPosition >= pageTop && scrollPosition <= pageBottom) {
-                        activePage = parseInt(page.dataset.pageNumber);
+
+        // Render a specific page on-demand (lazy rendering)
+        async function renderPage(i, pageDiv) {
+            if (!pdfDoc) return;
+            if (pageDiv.dataset.rendered) return;
+            try {
+                const page = await pdfDoc.getPage(i);
+                const viewport = page.getViewport({ scale: 1.5 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                // Clear placeholder and insert canvas
+                pageDiv.innerHTML = '';
+                pageDiv.appendChild(canvas);
+
+                await page.render({ canvasContext: context, viewport: viewport }).promise;
+                pageDiv.dataset.rendered = 'true';
+            } catch (err) {
+                console.error('renderPage error for', i, err);
+                pageDiv.innerHTML = `<div class="text-center py-20 text-red-400">Failed to render page ${i}</div>`;
+            }
+        }
+
+        // Populate page select list based on rendered pages (up to rendered max)
+        function populatePageSelect() {
+            // Clear existing options
+            pageSelect.innerHTML = '';
+            const renderedPages = Math.min(numPages, renderCap);
+            for (let i = 1; i <= renderedPages; i++) {
+                const opt = document.createElement('option');
+                opt.value = String(i);
+                opt.textContent = `Page ${i}`;
+                pageSelect.appendChild(opt);
+            }
+            pageSelect.value = String(activePage || 1);
+        }
+
+        // Persistence helpers: save/load FeatureGroup as GeoJSON in localStorage per page
+        function savePageTracesToStorage(page) {
+            try {
+                if (!pageTraces[page]) return;
+                const features = pageTraces[page].getLayers().map(l => l.toGeoJSON());
+                const fc = { type: 'FeatureCollection', features };
+                localStorage.setItem(`histo_traces_page_${page}`, JSON.stringify(fc));
+            } catch (err) {
+                console.error('savePageTracesToStorage error', err);
+            }
+        }
+
+        function loadPageTracesFromStorage(page) {
+            try {
+                const key = `histo_traces_page_${page}`;
+                const raw = localStorage.getItem(key);
+                if (!raw) return;
+                const geojson = JSON.parse(raw);
+                if (!geojson || geojson.type !== 'FeatureCollection') return;
+                if (!pageTraces[page]) pageTraces[page] = L.featureGroup();
+                L.geoJSON(geojson, {
+                    onEachFeature: function (feature, layer) {
+                        pageTraces[page].addLayer(layer);
                     }
                 });
-                
-                // Find the timeline item for this page
-                const timelineItem = timelineData.find(item => item.page === activePage);
-                if (timelineItem) {
-                    // Update map view
-                    map.flyTo(timelineItem.location, 6, {
-                        duration: 1
-                    });
-                    
-                    // Show timeline marker
-                    timelineMarker.classList.remove('hidden');
-                    locationDot.classList.remove('hidden');
-                    
-                    // Position the location dot
-                    const point = map.latLngToContainerPoint(timelineItem.location);
-                    locationDot.style.left = `${point.x}px`;
-                    locationDot.style.top = `${point.y}px`;
-                    
-                    // Update year display
-                    currentYear.textContent = timelineItem.year;
-                    
-                    // Update timeline progress
-                    const progress = (activePage / 10) * 100;
-                    timelineProgress.style.width = `${progress}%`;
-                } else {
-                    timelineMarker.classList.add('hidden');
-                    locationDot.classList.add('hidden');
-                    currentYear.textContent = '--';
+            } catch (err) {
+                console.error('loadPageTracesFromStorage error', err);
+            }
+        }
+
+        // Utility: deep clone a Leaflet layer (supports marker, polyline, polygon)
+        function cloneLayer(layer) {
+            const gj = layer.toGeoJSON();
+            let cloned = null;
+            if (gj.geometry.type === 'Point') {
+                cloned = L.marker([gj.geometry.coordinates[1], gj.geometry.coordinates[0]]);
+            } else if (gj.geometry.type === 'LineString') {
+                const coords = gj.geometry.coordinates.map(c => [c[1], c[0]]);
+                cloned = L.polyline(coords);
+            } else if (gj.geometry.type === 'Polygon') {
+                const coords = gj.geometry.coordinates.map(ring => ring.map(c => [c[1], c[0]]));
+                cloned = L.polygon(coords);
+            } else {
+                // fallback: try GeoJSON layer
+                cloned = L.geoJSON(gj).getLayers()[0];
+            }
+            // copy properties (popup content if present)
+            if (gj.properties && gj.properties.popup) cloned.bindPopup(gj.properties.popup);
+            return cloned;
+        }
+
+        function wirePageUiButtons() {
+            // Navigate to page when selected
+            pageSelect.addEventListener('change', (e) => {
+                const p = parseInt(e.target.value, 10);
+                navigateToPage(p);
+            });
+
+            // Auto-save toggle UI wiring
+            const autoSaveBtn = document.getElementById('auto-save-btn');
+            if (autoSaveBtn) {
+                autoSaveBtn.addEventListener('click', () => {
+                    autoSave = !autoSave;
+                    autoSaveBtn.textContent = autoSave ? 'AutoSave: On' : 'AutoSave: Off';
+                });
+                autoSaveBtn.textContent = autoSave ? 'AutoSave: On' : 'AutoSave: Off';
+            }
+
+            clearPageBtn.addEventListener('click', () => {
+                const p = parseInt(pageSelect.value, 10);
+                if (confirm(`Clear traces for page ${p}? This cannot be undone.`)) {
+                    clearPageTraces(p);
+                    updateMapForActivePage();
+                }
+            });
+
+            exportPageBtn.addEventListener('click', () => {
+                const p = parseInt(pageSelect.value, 10);
+                exportPageGeoJSON(p);
+            });
+
+            exportAllBtn.addEventListener('click', () => {
+                exportAllGeoJSON();
+            });
+
+            importBtn.addEventListener('click', () => {
+                importInput.click();
+            });
+
+            importInput.addEventListener('change', async (e) => {
+                if (!e.target.files || e.target.files.length === 0) return;
+                const file = e.target.files[0];
+                try {
+                    const text = await file.text();
+                    const json = JSON.parse(text);
+                    // Import into currently selected page
+                    const p = parseInt(pageSelect.value, 10);
+                    importGeoJSONToPage(json, p);
+                    updateMapForActivePage();
+                    alert('Import successful');
+                } catch (err) {
+                    console.error('Import error:', err);
+                    alert('Failed to import GeoJSON');
                 }
             });
         }
+
+        // Clear traces for a page
+        function clearPageTraces(page) {
+            if (!pageTraces[page]) return;
+            pageTraces[page].clearLayers();
+        }
+
+        // Export traces for a page as GeoJSON file
+        function exportPageGeoJSON(page) {
+            const fg = pageTraces[page];
+            if (!fg || fg.getLayers().length === 0) {
+                alert('No traces on this page to export');
+                return;
+            }
+            const features = fg.getLayers().map(layer => layer.toGeoJSON());
+            const fc = {
+                type: 'FeatureCollection',
+                features
+            };
+            downloadJSON(fc, `page-${page}-traces.geojson`);
+        }
+
+        // Export all pages' traces as a single GeoJSON with property `page`
+        function exportAllGeoJSON() {
+            const features = [];
+            const renderedPages = Math.min(numPages, renderCap);
+            for (let p = 1; p <= renderedPages; p++) {
+                const fg = pageTraces[p];
+                if (!fg) continue;
+                fg.getLayers().forEach(layer => {
+                    const gj = layer.toGeoJSON();
+                    // attach page property
+                    if (!gj.properties) gj.properties = {};
+                    gj.properties.page = p;
+                    features.push(gj);
+                });
+            }
+            if (features.length === 0) {
+                alert('No traces to export');
+                return;
+            }
+            const fc = { type: 'FeatureCollection', features };
+            downloadJSON(fc, `all-pages-traces.geojson`);
+        }
+
+        function downloadJSON(obj, filename) {
+            const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        // Import GeoJSON FeatureCollection into a page (adds layers to pageTraces[page])
+        function importGeoJSONToPage(geojson, page) {
+            if (!geojson || geojson.type !== 'FeatureCollection') throw new Error('Invalid GeoJSON');
+            if (!pageTraces[page]) pageTraces[page] = L.featureGroup();
+            L.geoJSON(geojson, {
+                onEachFeature: function (feature, layer) {
+                    pageTraces[page].addLayer(layer);
+                }
+            });
+        }
+
+        // Assign a newly drawn layer to the current page (or spread pages depending on mode)
+        function assignLayerToCurrentPage(layer) {
+            // remove from drawnItems (temporary)
+            if (drawnItems.hasLayer(layer)) drawnItems.removeLayer(layer);
+
+            const pagesToAssign = getPagesForActive();
+            pagesToAssign.forEach(p => {
+                if (!pageTraces[p]) pageTraces[p] = L.featureGroup();
+                pageTraces[p].addLayer(layer.clone ? layer.clone() : layer);
+            });
+
+            // ensure the map display is updated
+            updateMapForActivePage();
+        }
+
+        // Return array of pages considered active depending on single/spread mode
+        function getPagesForActive() {
+            if (traceDisplayMode === 'spread') {
+                const arr = [activePage];
+                if (activePage + 1 <= numPages) arr.push(activePage + 1);
+                return arr;
+            }
+            return [activePage];
+        }
+
+        // Update map to show only markers/traces for active page(s)
+        function updateMapForActivePage() {
+            // Clear all pageMarkers and pageTraces from the map
+            for (let p = 1; p <= Math.max(1, numPages); p++) {
+                if (pageMarkers[p] && map.hasLayer(pageMarkers[p])) map.removeLayer(pageMarkers[p]);
+                if (pageTraces[p] && map.hasLayer(pageTraces[p])) map.removeLayer(pageTraces[p]);
+            }
+
+            // Add markers/traces for pages we want
+            const pages = getPagesForActive();
+            let targetBounds = null;
+            pages.forEach(p => {
+                if (pageMarkers[p]) {
+                    pageMarkers[p].addTo(map);
+                    if (!targetBounds && pageMarkers[p].getBounds && pageMarkers[p].getLayers().length) targetBounds = pageMarkers[p].getBounds();
+                }
+                if (pageTraces[p]) {
+                    pageTraces[p].addTo(map);
+                    if (!targetBounds && pageTraces[p].getBounds && pageTraces[p].getLayers().length) targetBounds = pageTraces[p].getBounds();
+                }
+            });
+
+            // Make current page traces editable: reset drawnItems to include current page layers
+            try {
+                drawnItems.clearLayers();
+                pages.forEach(p => {
+                    if (pageTraces[p]) pageTraces[p].getLayers().forEach(l => drawnItems.addLayer(cloneLayer(l)));
+                });
+            } catch (err) { console.error('updateMapForActivePage editable sync error', err); }
+
+            // Update timeline UI based on first matching timeline item
+            const firstTimeline = timelineData.find(item => pages.includes(item.page));
+            if (firstTimeline) {
+                // Fly to first timeline location for the current pages
+                // If there are traces/markers, fit bounds to them; otherwise fly to timeline location
+                if (targetBounds && targetBounds.isValid && targetBounds.isValid()) {
+                    map.flyTo(targetBounds.getCenter(), 6, { duration: 1 });
+                } else {
+                    map.flyTo(firstTimeline.location, 6, { duration: 1 });
+                }
+                timelineMarker.classList.remove('hidden');
+                locationDot.classList.remove('hidden');
+                const point = map.latLngToContainerPoint(firstTimeline.location);
+                locationDot.style.left = `${point.x}px`;
+                locationDot.style.top = `${point.y}px`;
+                currentYear.textContent = firstTimeline.year;
+            } else {
+                timelineMarker.classList.add('hidden');
+                locationDot.classList.add('hidden');
+                currentYear.textContent = '--';
+            }
+
+            // progress relative to numPages (cap guard)
+            if (numPages > 0) {
+                const progress = (activePage / Math.max(1, Math.min(numPages, 50))) * 100;
+                timelineProgress.style.width = `${progress}%`;
+            }
+        }
+
+        // Enable draw controls on the map
+        function enableTraceMode() {
+            if (drawControl && !map.hasControl) {
+                map.addControl(drawControl);
+            }
+            // show existing page traces for the active page(s)
+            updateMapForActivePage();
+        }
+
+        // Disable draw controls
+        function disableTraceMode() {
+            if (drawControl) {
+                try { map.removeControl(drawControl); } catch (e) { /* ignore */ }
+            }
+            // still display page markers/traces, but drawing disabled
+            updateMapForActivePage();
+        }
+
+        // Setup scroll events to update map
+        function setupScrollEvents() {
+            const pdfViewer = document.getElementById('pdf-viewer');
+            const pages = () => document.querySelectorAll('.pdf-page');
+
+            // initial active page
+            activePage = 1;
+            updateMapForActivePage();
+
+            pdfViewer.addEventListener('scroll', () => {
+                const pageNodes = pages();
+                if (!pageNodes || pageNodes.length === 0) return;
+                const scrollPosition = pdfViewer.scrollTop + pdfViewer.clientHeight / 2;
+                let newActive = activePage;
+
+                // Find which page is currently at the center of the viewport
+                pageNodes.forEach(page => {
+                    const pageTop = page.offsetTop;
+                    const pageBottom = pageTop + page.offsetHeight;
+
+                    if (scrollPosition >= pageTop && scrollPosition <= pageBottom) {
+                        newActive = parseInt(page.dataset.pageNumber);
+                    }
+                });
+
+                if (newActive !== activePage) {
+                    activePage = newActive;
+                    updateMapForActivePage();
+                }
+            });
+
+            // Prev/Next button handlers
+            prevMarkerBtn.addEventListener('click', () => {
+                navigateToPage(activePage - 1);
+            });
+
+            nextMarkerBtn.addEventListener('click', () => {
+                navigateToPage(activePage + 1);
+            });
+        }
+
+        async function navigateToPage(pageNum) {
+            if (pageNum < 1) pageNum = 1;
+            if (pageNum > Math.min(numPages, renderCap)) pageNum = Math.min(numPages, renderCap);
+            const target = document.querySelector(`.pdf-page[data-page-number='${pageNum}']`);
+            if (target) {
+                // ensure page is rendered before scrolling
+                try { await renderPage(pageNum, target); } catch (e) { /* continue */ }
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // activePage will be updated by scroll listener; but set immediately to keep UI responsive
+                activePage = pageNum;
+                updateMapForActivePage();
+            }
+        }
+
         // Initialize
         feather.replace();
 
-        // Improved PDF error handling
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
-// Handle mobile viewport height
+        // Handle mobile viewport height
         function setViewportHeight() {
             let vh = window.innerHeight * 0.01;
             document.documentElement.style.setProperty('--vh', `${vh}px`);
