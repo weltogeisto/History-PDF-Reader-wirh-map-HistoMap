@@ -1,825 +1,863 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ScrollThroughTime - Historical Map Reader</title>
-    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/feather-icons"></script>
-    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.js"></script>
-    <!-- Leaflet.draw for tracing on the map -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-    <!-- jsPDF for generating a small test PDF in-browser -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.css" />
-    <style>
-        #map-container {
-            transition: all 0.5s ease;
-        }
-        .timeline-marker {
-            position: absolute;
-            width: 100%;
-            height: 2px;
-            background-color: rgba(255, 0, 0, 0.7);
-            z-index: 1000;
-        }
-        .location-dot {
-            width: 12px;
-            height: 12px;
-            background-color: #ef4444;
-            border-radius: 50%;
-            border: 2px solid white;
-            position: absolute;
-            transform: translate(-50%, -50%);
-            z-index: 1001;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            transition: all 0.3s ease;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScrollThroughTime - Historical Map Reader</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Feather Icons -->
+  <script src="https://unpkg.com/feather-icons"></script>
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.css"
+  />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.js"></script>
+
+  <!-- jsPDF (for test PDF) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+  <style>
+    /* Reset / base */
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      overscroll-behavior: none;
+    }
+
+    /* Reading progress bar */
+    .reading-progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      z-index: 100;
+      width: 0;
+      transition: width 0.2s;
+    }
+
+    /* Layout */
+    #pdf-viewer {
+      overflow-y: auto;
+      background: #f9fafb;
+    }
+    #map-container {
+      background: #e5e7eb;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* PDF pages */
+    .pdf-container {
+      max-width: 100%;
+      padding: 20px;
+    }
+    .pdf-page-wrapper {
+      position: relative;
+      margin-bottom: 40px;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .pdf-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .page-number {
+      text-align: center;
+      color: #9ca3af;
+      font-size: 0.875rem;
+      padding: 10px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    /* Text overlay / location badges */
+    .text-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .location-badge {
+      position: absolute;
+      background: rgba(254, 243, 199, 0.95);
+      border: 2px solid #f59e0b;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #92400e;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      white-space: nowrap;
+    }
+    .location-badge:hover {
+      background: rgba(251, 191, 36, 1);
+      transform: scale(1.1) translateY(-2px);
+      box-shadow: 0 4px 8px rgba(245, 158, 11, 0.4);
+      z-index: 10;
+    }
+    .location-badge.active {
+      background: rgba(239, 68, 68, 0.95);
+      border-color: #dc2626;
+      color: white;
+      transform: scale(1.15) translateY(-2px);
+      z-index: 15;
+      box-shadow: 0 6px 12px rgba(239, 68, 68, 0.5);
+    }
+
+    /* Resize handle */
+    .resize-handle {
+      display: none;
+      background: linear-gradient(
+        to right,
+        #e5e7eb 0%,
+        #9ca3af 50%,
+        #e5e7eb 100%
+      );
+      cursor: ew-resize;
+      z-index: 20;
+      touch-action: none;
+    }
+    .resize-handle::before {
+      content: "⋮⋮";
+      color: white;
+      font-size: 0.75rem;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Desktop: side-by-side, vertical resize handle */
+    @media (min-width: 769px) {
+      #pdf-viewer,
+      #map-container {
+        height: calc(100vh - 4rem);
+      }
+      .resize-handle {
+        display: block;
+        width: 10px;
+        height: 100%;
+        position: relative;
+      }
+    }
+
+    /* Mobile: stacked, horizontal resize handle */
+    @media (max-width: 768px) {
+      nav {
+        position: relative !important;
+      }
+      .nav-controls {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .nav-controls button {
+        font-size: 0.75rem !important;
+        padding: 0.5rem !important;
+      }
+      .main-content {
+        flex-direction: column !important;
+        padding-top: 0 !important;
+      }
+      #pdf-viewer,
+      #map-container {
+        width: 100% !important;
+        height: 50vh !important;
+        position: relative !important;
+      }
+      .resize-handle {
+        display: block;
+        width: 100%;
+        height: 10px;
+        background: linear-gradient(
+          to bottom,
+          #e5e7eb 0%,
+          #9ca3af 50%,
+          #e5e7eb 100%
+        );
+        cursor: ns-resize;
+        position: relative;
+      }
+      .resize-handle::before {
+        content: "⋯⋯";
+      }
+    }
+
+    /* Timeline controls */
+    .timeline-controls {
+      width: 90%;
+      padding: 0.5rem;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 font-sans">
-    <!-- Navigation -->
-    <nav class="bg-white shadow-md fixed w-full z-10">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <i data-feather="map" class="text-red-600 mr-2"></i>
-                    <span class="text-xl font-bold text-gray-800">ScrollThroughTime</span>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="preview.html" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition flex items-center">
-                        <i data-feather="external-link" class="mr-2"></i> Preview Mode
-                    </a>
-                    <button id="upload-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center">
-                        <i data-feather="upload" class="mr-2"></i> Upload PDF
-                    </button>
-                    <button id="generate-test-pdf" class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition flex items-center">
-                        <i data-feather="file-text" class="mr-2"></i> Generate Test PDF
-                    </button>
-                    <button id="auto-save-btn" class="px-3 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 transition flex items-center text-sm" title="Toggle auto-save of traces">
-                        AutoSave: On
-                    </button>
-                        <button id="trace-toggle" class="px-3 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition flex items-center" title="Toggle trace mode">
-                            <i data-feather="edit-3" class="mr-2"></i><span id="trace-toggle-text">Trace: Off</span>
-                        </button>
-                        <select id="trace-mode-select" class="px-2 py-2 bg-white border rounded-md text-sm" title="Single page or spread tracing">
-                            <option value="single">Single Page</option>
-                            <option value="spread">Spread (double page)</option>
-                        </select>
-                        <!-- Page management UI -->
-                        <select id="page-select" class="px-2 py-2 bg-white border rounded-md text-sm" title="Go to page">
-                            <option value="1">Page 1</option>
-                        </select>
-                        <button id="clear-page-btn" class="px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 text-sm" title="Clear traces for selected page">Clear Page</button>
-                        <button id="export-page-btn" class="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm" title="Export traces for selected page">Export Page</button>
-                        <button id="export-all-btn" class="px-3 py-2 bg-indigo-700 text-white rounded-md hover:bg-indigo-800 text-sm" title="Export traces for all pages">Export All</button>
-                        <button id="import-btn" class="px-3 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 text-sm" title="Import GeoJSON to current page">Import</button>
-                        <input type="file" id="import-input" accept="application/json,.geojson" class="hidden">
-                    <input type="file" id="pdf-input" accept=".pdf" class="hidden">
-</div>
-</div>
+<body class="bg-gray-100">
+  <!-- Reading Progress -->
+  <div class="reading-progress" id="readingProgress"></div>
+
+  <!-- Nav -->
+  <nav class="bg-white shadow-md fixed w-full z-10">
+    <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
+      <div class="flex justify-between h-auto md:h-16 py-2 md:py-0">
+        <div class="flex items-center">
+          <i data-feather="map" class="text-red-600 mr-2 w-5 h-5"></i>
+          <span class="text-lg md:text-xl font-bold text-gray-800">
+            ScrollThroughTime
+          </span>
         </div>
-    </nav>
-    <!-- Main Content -->
-    <div class="pt-16 pb-8 flex flex-col md:flex-row">
-        <!-- PDF Viewer -->
-        <div class="w-full md:w-1/2 h-screen overflow-y-auto p-4 bg-white shadow-lg" id="pdf-viewer">
-            <div class="text-center py-20 text-gray-500" id="pdf-placeholder">
-                <i data-feather="file" class="w-12 h-12 mx-auto mb-4"></i>
-                <h3 class="text-xl font-medium">No PDF Loaded</h3>
-                <p class="mt-2">Upload a PDF to begin your historical journey</p>
-                <p class="text-red-500 text-sm hidden" id="upload-error"></p>
-            </div>
-<div id="pdf-container" class="hidden"></div>
+        <div class="flex items-center flex-wrap gap-2 nav-controls">
+          <button
+            id="upload-btn"
+            class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center text-sm"
+          >
+            <i data-feather="upload" class="mr-1 w-4 h-4"></i>
+            Upload
+          </button>
+          <button
+            id="generate-test-pdf"
+            class="px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition flex items-center text-sm"
+          >
+            <i data-feather="file-text" class="mr-1 w-4 h-4"></i>
+            Test
+          </button>
+          <button
+            id="auto-map-toggle"
+            class="px-3 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 transition text-sm"
+          >
+            Auto ON
+          </button>
+          <input
+            type="file"
+            id="pdf-input"
+            accept=".pdf"
+            class="hidden"
+          />
         </div>
-        <!-- Map Viewer -->
-        <div class="w-full md:w-1/2 h-screen sticky top-16" id="map-container">
-<div id="map" class="h-full w-full"></div>
-            <div id="timeline-marker" class="timeline-marker hidden"></div>
-            <div id="location-dot" class="location-dot hidden"></div>
-        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <div class="pt-0 md:pt-16 pb-8 flex flex-col md:flex-row main-content">
+    <!-- PDF viewer -->
+    <div
+      id="pdf-viewer"
+      class="w-full md:w-1/2 h-screen overflow-y-auto bg-gray-50"
+    >
+      <div
+        id="pdf-placeholder"
+        class="text-center py-20 text-gray-500"
+      >
+        <i data-feather="file" class="w-12 h-12 mx-auto mb-4"></i>
+        <h3 class="text-xl font-medium">No PDF Loaded</h3>
+        <p class="mt-2">Upload a PDF or click Test to begin</p>
+      </div>
+      <div id="pdf-container" class="pdf-container hidden"></div>
     </div>
 
-    <!-- Timeline Control -->
-    <div class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-3 rounded-lg shadow-xl flex items-center space-x-4 z-10">
-        <button id="prev-marker" class="p-2 rounded-full bg-gray-200 hover:bg-gray-300">
-            <i data-feather="chevron-left"></i>
-        </button>
-        <div class="w-64 h-2 bg-gray-200 rounded-full relative" id="timeline-track">
-            <div class="absolute top-0 left-0 h-full bg-blue-600 rounded-full" id="timeline-progress"></div>
-        </div>
-        <button id="next-marker" class="p-2 rounded-full bg-gray-200 hover:bg-gray-300">
-            <i data-feather="chevron-right"></i>
-        </button>
-        <div class="ml-4 text-sm text-gray-700" id="time-indicator">
-            <span id="current-year">--</span>
-        </div>
+    <!-- Resize handle -->
+    <div id="resizeHandle" class="resize-handle"></div>
+
+    <!-- Map -->
+    <div
+      id="map-container"
+      class="w-full md:w-1/2 h-screen sticky top-16"
+    >
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <!-- Timeline controls -->
+  <div
+    class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-3 rounded-lg shadow-xl flex items-center space-x-4 z-10 timeline-controls"
+  >
+    <button
+      id="prev-marker"
+      class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition"
+    >
+      <i data-feather="chevron-left" class="w-4 h-4"></i>
+    </button>
+
+    <div
+      id="timeline-bar"
+      class="w-32 md:w-64 h-2 bg-gray-200 rounded-full relative cursor-pointer"
+    >
+      <div
+        id="timeline-progress"
+        class="absolute top-0 left-0 h-full bg-blue-600 rounded-full transition-all duration-300"
+        style="width: 0"
+      ></div>
     </div>
 
-    <script>
-        // Initialize map with user's location if available
-        const map = L.map('map');
+    <button
+      id="next-marker"
+      class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition"
+    >
+      <i data-feather="chevron-right" class="w-4 h-4"></i>
+    </button>
 
-        // Try to get user's location
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const userLocation = [position.coords.latitude, position.coords.longitude];
-                    map.setView(userLocation, 6);
-                    L.marker(userLocation)
-                        .addTo(map)
-                        .bindPopup("Your Location")
-                        .openPopup();
-                },
-                (error) => {
-                    console.error("Geolocation error:", error);
-                    map.setView([30, 0], 2); // Default view if location denied
-                },
-                {enableHighAccuracy: true, timeout: 5000, maximumAge: 0}
-            );
+    <span class="text-sm font-medium">
+      <span id="marker-counter">0/0</span>
+    </span>
+  </div>
+
+  <script>
+    // Ensure PDF.js worker is configured
+    if (typeof window.pdfjsLib !== "undefined") {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+    }
+
+    const state = {
+      pdfDoc: null,
+      map: null,
+      regionPolygons: [],
+      autoMap: true,
+      allLocations: [],
+      currentLocationIndex: 0,
+      isResizing: false,
+    };
+
+    // Geo database
+    const geoDatabase = {
+      Constantinople: [41.0082, 28.9784],
+      Istanbul: [41.0082, 28.9784],
+      Moscow: [55.7558, 37.6173],
+      Crimea: [45.0, 34.0],
+      "Black Sea": [43.0, 35.0],
+      Azov: [47.1, 39.4],
+      Sevastopol: [44.6167, 33.525],
+      Kiev: [50.4501, 30.5234],
+      Vienna: [48.2082, 16.3738],
+      Danube: [45.0, 29.0],
+      Volga: [55.0, 49.0],
+      Athens: [37.9838, 23.7275],
+      Varna: [43.2141, 27.9147],
+      Sofia: [42.6977, 23.3219],
+      Belgrade: [44.7866, 20.4489],
+      Bucharest: [44.4268, 26.1025],
+      Odessa: [46.4825, 30.7233],
+      Erzurum: [39.9, 41.2667],
+      Cairo: [30.0444, 31.2357],
+      Baghdad: [33.3152, 44.3661],
+      Damascus: [33.5138, 36.2765],
+      Mohacs: [45.9928, 18.6839],
+      Hungary: [47.1625, 19.5033],
+      German: [51.1657, 10.4515],
+      Germany: [51.1657, 10.4515],
+      Habsburg: [48.2082, 16.3738],
+      Austria: [47.5162, 14.5501],
+    };
+
+    const regionPolygons = {
+      Anatolia: {
+        coords: [
+          [36.0, 26.0],
+          [41.5, 26.0],
+          [42.0, 40.0],
+          [37.0, 44.5],
+          [36.0, 26.0],
+        ],
+        color: "#3b82f6",
+      },
+      Balkans: {
+        coords: [
+          [37.0, 19.0],
+          [46.0, 13.0],
+          [47.0, 22.0],
+          [40.0, 28.0],
+          [37.0, 21.0],
+        ],
+        color: "#8b5cf6",
+      },
+      Caucasus: {
+        coords: [
+          [40.0, 38.0],
+          [44.0, 48.0],
+          [40.0, 48.0],
+          [40.0, 38.0],
+        ],
+        color: "#10b981",
+      },
+    };
+
+    function initMap() {
+      state.map = L.map("map").setView([45, 25], 5);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 18,
+        attribution: "© OpenStreetMap",
+      }).addTo(state.map);
+
+      // Add region polygons
+      Object.keys(regionPolygons).forEach((name) => {
+        const region = regionPolygons[name];
+        const polygon = L.polygon(region.coords, {
+          color: region.color,
+          fillColor: region.color,
+          fillOpacity: 0,
+          weight: 2,
+          opacity: 0,
+        }).addTo(state.map);
+        polygon.bindPopup("<b>" + name + "</b>");
+        polygon.regionName = name;
+        state.regionPolygons.push(polygon);
+      });
+    }
+
+    function handleLocationClick(locationName, element) {
+      const coords = geoDatabase[locationName];
+      if (!coords) return;
+
+      // Update active badge
+      document
+        .querySelectorAll(".location-badge")
+        .forEach((el) => el.classList.remove("active"));
+      element.classList.add("active");
+
+      // Update current index for timeline
+      const idx = state.allLocations.findIndex(
+        (loc) => loc.name === locationName && loc.element === element
+      );
+      if (idx !== -1) {
+        state.currentLocationIndex = idx;
+        updateTimeline();
+      }
+
+      if (!state.autoMap || !state.map) return;
+
+      // Handle region polygons vs points
+      const regionDef = regionPolygons[locationName];
+      if (regionDef) {
+        const poly = state.regionPolygons.find(
+          (p) => p.regionName === locationName
+        );
+        if (poly) {
+          poly.setStyle({ fillOpacity: 0.3, opacity: 0.8 });
+          state.map.fitBounds(poly.getBounds());
+          setTimeout(
+            () =>
+              poly.setStyle({
+                fillOpacity: 0,
+                opacity: 0,
+              }),
+            3000
+          );
+        }
+      } else {
+        state.map.setView(coords, 8);
+        const marker = L.circleMarker(coords, {
+          radius: 15,
+          fillColor: "#ef4444",
+          color: "#ffffff",
+          weight: 3,
+          fillOpacity: 0.7,
+        })
+          .addTo(state.map)
+          .bindPopup("<b>" + locationName + "</b>")
+          .openPopup();
+
+        setTimeout(() => state.map.removeLayer(marker), 4000);
+      }
+    }
+
+    async function renderAllPages() {
+      const container = document.getElementById("pdf-container");
+      container.innerHTML = "";
+      state.allLocations = [];
+
+      console.log("Rendering PDF pages…");
+      for (let pageNum = 1; pageNum <= state.pdfDoc.numPages; pageNum++) {
+        const page = await state.pdfDoc.getPage(pageNum);
+        const scale = 1.5;
+        const viewport = page.getViewport({ scale });
+
+        // Page wrapper
+        const pageWrapper = document.createElement("div");
+        pageWrapper.className = "pdf-page-wrapper";
+        pageWrapper.dataset.page = pageNum;
+
+        // Page number
+        const pageNumber = document.createElement("div");
+        pageNumber.className = "page-number";
+        pageNumber.textContent = "Page " + pageNum;
+        pageWrapper.appendChild(pageNumber);
+
+        // Canvas container
+        const canvasContainer = document.createElement("div");
+        canvasContainer.style.position = "relative";
+        canvasContainer.style.width = viewport.width + "px";
+        canvasContainer.style.height = viewport.height + "px";
+
+        // Canvas
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.className = "pdf-canvas";
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        canvasContainer.appendChild(canvas);
+
+        // Text overlay
+        const textOverlay = document.createElement("div");
+        textOverlay.className = "text-overlay";
+
+        const textContent = await page.getTextContent();
+        const foundLocations = new Set();
+
+        textContent.items.forEach((item) => {
+          const rawText = (item.str || "").trim();
+          if (!rawText) return;
+
+          Object.keys(geoDatabase).forEach((location) => {
+            const regex = new RegExp(location, "i");
+            const key = location + "@p" + pageNum;
+            if (regex.test(rawText) && !foundLocations.has(key)) {
+              foundLocations.add(key);
+
+              const transform = item.transform || [];
+              const x = transform[4] || 0;
+              const y = viewport.height - (transform[5] || 0);
+
+              const badge = document.createElement("div");
+              badge.className = "location-badge";
+              badge.textContent = location;
+              badge.dataset.location = location;
+              badge.style.left = x + "px";
+              badge.style.top = y - 22 + "px";
+              badge.title = "Click to view location on map";
+
+              badge.onclick = () => handleLocationClick(location, badge);
+
+              textOverlay.appendChild(badge);
+
+              // Track for timeline
+              state.allLocations.push({
+                name: location,
+                element: badge,
+                page: pageNum,
+              });
+            }
+          });
+        });
+
+        canvasContainer.appendChild(textOverlay);
+        pageWrapper.appendChild(canvasContainer);
+        container.appendChild(pageWrapper);
+      }
+
+      console.log("Total locations found:", state.allLocations.length);
+      updateTimeline();
+    }
+
+    function updateTimeline() {
+      const total = state.allLocations.length;
+      const counter = document.getElementById("marker-counter");
+      counter.textContent =
+        (total === 0 ? 0 : state.currentLocationIndex + 1) + "/" + total;
+
+      if (total === 0) {
+        document.getElementById("timeline-progress").style.width = "0";
+        return;
+      }
+
+      const progress =
+        (state.currentLocationIndex /
+          Math.max(total - 1, 1)) *
+        100;
+      document.getElementById("timeline-progress").style.width =
+        progress + "%";
+    }
+
+    function navigateToLocation(index) {
+      if (index < 0 || index >= state.allLocations.length) return;
+      state.currentLocationIndex = index;
+      const location = state.allLocations[index];
+
+      location.element.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      handleLocationClick(location.name, location.element);
+    }
+
+    function updateReadingProgress() {
+      const viewer = document.getElementById("pdf-viewer");
+      if (!viewer) return;
+      const scrollPercent =
+        (viewer.scrollTop /
+          (viewer.scrollHeight - viewer.clientHeight || 1)) *
+        100;
+      document.getElementById("readingProgress").style.width =
+        Math.min(scrollPercent, 100) + "%";
+    }
+
+    async function loadPDF(fileOrBlob) {
+      try {
+        if (typeof window.pdfjsLib === "undefined") {
+          throw new Error("PDF.js library not loaded");
+        }
+
+        let arrayBuffer;
+        if (fileOrBlob instanceof Blob) {
+          arrayBuffer = await fileOrBlob.arrayBuffer();
         } else {
-            map.setView([30, 0], 2); // Default view if no geolocation support
+          // File from input
+          arrayBuffer = await fileOrBlob.arrayBuffer();
         }
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-
-        // PDF.js configuration
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
-
-        // Demo data - would normally come from PDF analysis or user input
-        const timelineData = [
-            { page: 1, year: 1066, location: [51.1789, -1.8262], event: "Norman Conquest of England" },
-            { page: 3, year: 1215, location: [51.5165, -0.0956], event: "Signing of Magna Carta" },
-            { page: 5, year: 1346, location: [50.7258, 2.2583], event: "Battle of Crécy" },
-            { page: 7, year: 1415, location: [50.4536, 2.1418], event: "Battle of Agincourt" },
-            { page: 9, year: 1453, location: [41.0082, 28.9784], event: "Fall of Constantinople" }
-        ];
-
-    // Page-specific structures
-    let numPages = 0; // actual pdf.numPages
-    let pdfDoc = null; // PDF.js document for lazy-loading
-    let renderCap = 50; // number of pages we will create placeholders for by default
-    const pageTraces = {}; // page -> L.FeatureGroup
-    const pageMarkers = {}; // page -> L.FeatureGroup
-    let activePage = 1;
-
-    // Drawing / tracing
-    const drawnItems = L.featureGroup(); // will act as the editable group for current page(s)
-    let drawControl = null;
-    let traceModeEnabled = false;
-    let autoSave = true; // auto-save traces to localStorage
-
-        // Mode: 'single' or 'spread'
-        let traceDisplayMode = 'single';
-
-    // UI Elements
-        const pdfInput = document.getElementById('pdf-input');
-        const uploadBtn = document.getElementById('upload-btn');
-        const pdfContainer = document.getElementById('pdf-container');
-        const pdfPlaceholder = document.getElementById('pdf-placeholder');
-        const timelineMarker = document.getElementById('timeline-marker');
-        const locationDot = document.getElementById('location-dot');
-        const timelineProgress = document.getElementById('timeline-progress');
-        const currentYear = document.getElementById('current-year');
-        const prevMarkerBtn = document.getElementById('prev-marker');
-        const nextMarkerBtn = document.getElementById('next-marker');
-        const timelineTrack = document.getElementById('timeline-track');
-        const uploadError = document.getElementById('upload-error');
-        const traceToggle = document.getElementById('trace-toggle');
-        const traceToggleText = document.getElementById('trace-toggle-text');
-        const traceModeSelect = document.getElementById('trace-mode-select');
-    const pageSelect = document.getElementById('page-select');
-    const clearPageBtn = document.getElementById('clear-page-btn');
-    const exportPageBtn = document.getElementById('export-page-btn');
-    const exportAllBtn = document.getElementById('export-all-btn');
-    const importBtn = document.getElementById('import-btn');
-    const importInput = document.getElementById('import-input');
-
-        // Initialize drawnItems (not added to map permanently)
-        // drawnItems will temporarily hold newly drawn layers before they are assigned to a page
-
-        // Event listeners
-        uploadBtn.addEventListener('click', () => {
-            pdfInput.click();
+        const loadingTask = window.pdfjsLib.getDocument({
+          data: new Uint8Array(arrayBuffer),
         });
+        state.pdfDoc = await loadingTask.promise;
 
-        // Generate a small 2-page test PDF using jsPDF
-        const generateTestBtn = document.getElementById('generate-test-pdf');
-        if (generateTestBtn) {
-            generateTestBtn.addEventListener('click', () => {
-                try {
-                    const { jsPDF } = window.jspdf;
-                    const doc = new jsPDF();
-                    doc.setFontSize(18);
-                    doc.text('ScrollThroughTime — Test PDF', 20, 30);
-                    doc.setFontSize(12);
-                    doc.text('This is page 1. Use this PDF to test lazy-loading and tracing.', 20, 50);
-                    doc.addPage();
-                    doc.text('Page 2 — another page for scrolling', 20, 30);
-                    doc.save('scrollthroughtime-test.pdf');
-                } catch (err) {
-                    console.error('jsPDF generate error', err);
-                    alert('Failed to generate test PDF (jsPDF not available)');
-                }
-            });
+        document
+          .getElementById("pdf-placeholder")
+          .classList.add("hidden");
+        document
+          .getElementById("pdf-container")
+          .classList.remove("hidden");
+
+        await renderAllPages();
+      } catch (error) {
+        alert("Error loading PDF: " + error.message);
+        console.error("PDF Error", error);
+      }
+    }
+
+    function generateTestPDF() {
+      if (!window.jspdf) {
+        alert("jsPDF library not loaded");
+        return;
+      }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      // Page 1
+      doc.setFontSize(16);
+      doc.text("The Battle of Mohacs 1526", 20, 20);
+      doc.setFontSize(12);
+      doc.text(
+        "Near Hungary, Ottoman forces defeated Habsburg.",
+        20,
+        40
+      );
+      doc.text(
+        "The march continued toward Vienna and the Danube.",
+        20,
+        50
+      );
+      doc.text(
+        "German resistance formed as Constantinople directed.",
+        20,
+        60
+      );
+
+      // Page 2
+      doc.addPage();
+      doc.setFontSize(16);
+      doc.text("Ottoman Expansion", 20, 20);
+      doc.setFontSize(12);
+      doc.text(
+        "Key cities: Constantinople, Moscow, Cairo, Baghdad.",
+        20,
+        40
+      );
+      doc.text("Regions: Anatolia, Balkans, and Caucasus.", 20, 50);
+      doc.text(
+        "Strategic areas: Black Sea and Crimea.",
+        20,
+        60
+      );
+
+      // Page 3
+      doc.addPage();
+      doc.setFontSize(16);
+      doc.text("Later Campaigns", 20, 20);
+      doc.setFontSize(12);
+      doc.text(
+        "Extended to Damascus and Baghdad in the east.",
+        20,
+        40
+      );
+      doc.text(
+        "Cities: Belgrade, Bucharest, Odessa, Sevastopol.",
+        20,
+        50
+      );
+      doc.text(
+        "Struggle for Austria and Vienna continued.",
+        20,
+        60
+      );
+
+      const blob = doc.output("blob");
+      loadPDF(blob);
+    }
+
+    function initResizer() {
+      const handle = document.getElementById("resizeHandle");
+      const pdfViewer = document.getElementById("pdf-viewer");
+      const mapContainer = document.getElementById("map-container");
+
+      let startY = 0;
+      let startX = 0;
+      let startHeightPdf = 0;
+      let startWidthPdf = 0;
+
+      function startResize(e) {
+        state.isResizing = true;
+        const isTouch = e.type === "touchstart";
+        startY = isTouch ? e.touches[0].clientY : e.clientY;
+        startX = isTouch ? e.touches[0].clientX : e.clientX;
+        startHeightPdf = pdfViewer.offsetHeight;
+        startWidthPdf = pdfViewer.offsetWidth;
+
+        document.addEventListener("mousemove", resize);
+        document.addEventListener("touchmove", resize);
+        document.addEventListener("mouseup", stopResize);
+        document.addEventListener("touchend", stopResize);
+        e.preventDefault();
+      }
+
+      function resize(e) {
+        if (!state.isResizing) return;
+        const isTouch = e.type === "touchmove";
+
+        if (window.innerWidth <= 768) {
+          // Vertical resize (stacked)
+          const currentY = isTouch ? e.touches[0].clientY : e.clientY;
+          const newHeight = startHeightPdf + (currentY - startY);
+          const minHeight = window.innerHeight * 0.2;
+          const maxHeight = window.innerHeight * 0.8;
+
+          const clamped = Math.max(minHeight, Math.min(maxHeight, newHeight));
+          pdfViewer.style.height = clamped + "px";
+          mapContainer.style.height =
+            window.innerHeight - clamped - 10 + "px";
+        } else {
+          // Horizontal resize (side-by-side)
+          const currentX = isTouch ? e.touches[0].clientX : e.clientX;
+          const newWidth = startWidthPdf + (currentX - startX);
+          const minWidth = window.innerWidth * 0.2;
+          const maxWidth = window.innerWidth * 0.8;
+
+          const clamped = Math.max(minWidth, Math.min(maxWidth, newWidth));
+          pdfViewer.style.width = clamped + "px";
+          mapContainer.style.width =
+            window.innerWidth - clamped - 10 + "px";
+
+          if (state.map) {
+            state.map.invalidateSize();
+          }
         }
+      }
 
-        traceToggle.addEventListener('click', () => {
-            traceModeEnabled = !traceModeEnabled;
-            if (traceModeEnabled) enableTraceMode(); else disableTraceMode();
-            traceToggleText.textContent = traceModeEnabled ? 'Trace: On' : 'Trace: Off';
-        });
+      function stopResize() {
+        state.isResizing = false;
+        document.removeEventListener("mousemove", resize);
+        document.removeEventListener("touchmove", resize);
+        document.removeEventListener("mouseup", stopResize);
+        document.removeEventListener("touchend", stopResize);
+      }
 
-        traceModeSelect.addEventListener('change', (e) => {
-            traceDisplayMode = e.target.value; // 'single' or 'spread'
-            // refresh map display for the active page(s)
-            updateMapForActivePage();
-        });
+      handle.addEventListener("mousedown", startResize);
+      handle.addEventListener("touchstart", startResize, {
+        passive: false,
+      });
+    }
 
-        pdfInput.addEventListener('change', async function(e) {
-            if (!e.target.files || e.target.files.length === 0) {
-                return;
-            }
+    // Event listeners
+    document
+      .getElementById("upload-btn")
+      .addEventListener("click", () =>
+        document.getElementById("pdf-input").click()
+      );
 
-            const file = e.target.files[0];
-            if (!file) return;
+    document
+      .getElementById("pdf-input")
+      .addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) loadPDF(file);
+      });
 
-            // Clear previous errors
-            uploadError.textContent = '';
-            uploadError.classList.add('hidden');
+    document
+      .getElementById("generate-test-pdf")
+      .addEventListener("click", generateTestPDF);
 
-            // Validate file type
-            if (file.type !== 'application/pdf') {
-                uploadError.textContent = 'Please select a valid PDF file';
-                uploadError.classList.remove('hidden');
-                return;
-            }
+    document
+      .getElementById("auto-map-toggle")
+      .addEventListener("click", (e) => {
+        state.autoMap = !state.autoMap;
+        e.target.textContent = "Auto " + (state.autoMap ? "ON" : "OFF");
+        e.target.classList.toggle("bg-teal-500", state.autoMap);
+        e.target.classList.toggle("bg-gray-400", !state.autoMap);
+      });
 
-            // Validate file size (20MB max)
-            if (file.size > 20 * 1024 * 1024) {
-                uploadError.textContent = 'File size too large (max 20MB)';
-                uploadError.classList.remove('hidden');
-                return;
-            }
-
-            try {
-                pdfPlaceholder.classList.add('hidden');
-                pdfContainer.classList.remove('hidden');
-                pdfContainer.innerHTML = '<div class="text-center py-20"><i data-feather="loader" class="animate-spin w-12 h-12 mx-auto"></i><p class="mt-4">Loading PDF...</p></div>';
-                feather.replace();
-
-                const fileReader = new FileReader();
-                
-                fileReader.onload = async function() {
-                    try {
-                        const typedArray = new Uint8Array(this.result);
-                        const pdf = await pdfjsLib.getDocument(typedArray).promise;
-
-                        // Lazy-load rendering: create placeholders for pages and render on demand
-                        pdfContainer.innerHTML = '';
-                        pdfDoc = pdf;
-                        numPages = pdf.numPages;
-                        // allow a larger cap for placeholders but avoid huge DOMs
-                        renderCap = Math.min(numPages, 200);
-
-                        // Reset page structures
-                        for (let k in pageTraces) delete pageTraces[k];
-                        for (let k in pageMarkers) delete pageMarkers[k];
-
-                        // IntersectionObserver to render pages when they enter view
-                        const observer = new IntersectionObserver(async (entries, obs) => {
-                            for (const entry of entries) {
-                                if (entry.isIntersecting) {
-                                    const pageDiv = entry.target;
-                                    const idx = parseInt(pageDiv.dataset.pageNumber, 10);
-                                    try {
-                                        await renderPage(idx, pageDiv);
-                                    } catch (err) {
-                                        console.error('Error lazy-rendering page', idx, err);
-                                    }
-                                    obs.unobserve(pageDiv);
-                                }
-                            }
-                        }, { root: document.getElementById('pdf-viewer'), rootMargin: '300px' });
-
-                        // create placeholders for pages up to renderCap
-                        for (let i = 1; i <= renderCap; i++) {
-                            const pageDiv = document.createElement('div');
-                            pageDiv.className = 'pdf-page mb-4 relative';
-                            pageDiv.dataset.pageNumber = i;
-                            pageDiv.innerHTML = `<div class="text-center py-20 text-gray-400">Page ${i} — loading when visible...</div>`;
-
-                            // placeholder marker bar if timeline data exists for this page
-                            const timelineItem = timelineData.find(item => item.page === i);
-                            if (timelineItem) {
-                                const marker = document.createElement('div');
-                                marker.className = 'absolute top-0 left-0 w-full h-1 bg-red-500';
-                                marker.dataset.year = timelineItem.year;
-                                marker.dataset.location = timelineItem.location;
-                                pageDiv.appendChild(marker);
-                            }
-
-                            // Initialize page containers for traces and markers
-                            pageTraces[i] = L.featureGroup();
-                            pageMarkers[i] = L.featureGroup();
-
-                            // load any saved traces from localStorage
-                            try { loadPageTracesFromStorage(i); } catch (err) { /* ignore */ }
-
-                            pdfContainer.appendChild(pageDiv);
-                            observer.observe(pageDiv);
-                        }
-
-                        // Prepare demo markers (grouped by page)
-                        loadDemoData();
-
-                        // Setup draw control (once)
-                        if (!drawControl) {
-                            // drawnItems will be the editable featureGroup for currently visible page traces
-                            drawnItems.addTo(map);
-                            drawControl = new L.Control.Draw({
-                                edit: { featureGroup: drawnItems },
-                                draw: {
-                                    polyline: true,
-                                    polygon: true,
-                                    marker: true,
-                                    rectangle: false,
-                                    circle: false,
-                                    circlemarker: false
-                                }
-                            });
-                        }
-
-                        // Wire draw created handler
-                        map.on(L.Draw.Event.CREATED, function (e) {
-                            const layer = e.layer;
-                            // Add to editable group (so it can be edited immediately)
-                            drawnItems.addLayer(layer);
-                            assignLayerToCurrentPage(layer);
-                            // autosave
-                            const pages = getPagesForActive();
-                            if (autoSave) pages.forEach(p => savePageTracesToStorage(p));
-                        });
-
-                        // When layers are edited, reflect edits to the pageTraces of active pages
-                        map.on(L.Draw.Event.EDITED, function (e) {
-                            // After edit, sync editable group to pageTraces for active pages
-                            const pages = getPagesForActive();
-                            pages.forEach(p => {
-                                // replace pageTraces[p] content with clones of drawnItems layers
-                                if (!pageTraces[p]) pageTraces[p] = L.featureGroup();
-                                pageTraces[p].clearLayers();
-                                drawnItems.getLayers().forEach(layer => {
-                                    // clone layer to avoid reference issues
-                                    const cloned = cloneLayer(layer);
-                                    pageTraces[p].addLayer(cloned);
-                                });
-                                if (autoSave) savePageTracesToStorage(p);
-                            });
-                        });
-
-                        // When layers are deleted via edit, sync as well
-                        map.on(L.Draw.Event.DELETED, function (e) {
-                            const pages = getPagesForActive();
-                            pages.forEach(p => {
-                                if (!pageTraces[p]) pageTraces[p] = L.featureGroup();
-                                // rebuild pageTraces[p] from drawnItems
-                                pageTraces[p].clearLayers();
-                                drawnItems.getLayers().forEach(layer => {
-                                    const cloned = cloneLayer(layer);
-                                    pageTraces[p].addLayer(cloned);
-                                });
-                                if (autoSave) savePageTracesToStorage(p);
-                            });
-                        });
-
-                        setupScrollEvents();
-                        // populate page list UI
-                        populatePageSelect();
-                        // wire page UI buttons
-                        wirePageUiButtons();
-                    } catch (error) {
-                        console.error('PDF processing error:', error);
-                        uploadError.textContent = 'Error loading PDF. Please try another file.';
-                        uploadError.classList.remove('hidden');
-                        pdfPlaceholder.classList.remove('hidden');
-                        pdfContainer.classList.add('hidden');
-                    }
-                };
-
-                fileReader.onerror = function() {
-                    uploadError.textContent = 'Error reading file. Please try again.';
-                    uploadError.classList.remove('hidden');
-                    pdfPlaceholder.classList.remove('hidden');
-                    pdfContainer.classList.add('hidden');
-                };
-
-                fileReader.readAsArrayBuffer(file);
-
-            } catch (error) {
-                console.error('PDF upload error:', error);
-                uploadError.textContent = 'An unexpected error occurred. Please try again.';
-                uploadError.classList.remove('hidden');
-                pdfPlaceholder.classList.remove('hidden');
-                pdfContainer.classList.add('hidden');
-            }
-        });
-
-        // For demo purposes - create markers grouped by page
-        function loadDemoData() {
-            timelineData.forEach(item => {
-                const marker = L.marker(item.location).bindPopup(`<b>${item.year}</b><br>${item.event}`);
-                if (!pageMarkers[item.page]) pageMarkers[item.page] = L.featureGroup();
-                pageMarkers[item.page].addLayer(marker);
-            });
+    document
+      .getElementById("prev-marker")
+      .addEventListener("click", () => {
+        if (state.currentLocationIndex > 0) {
+          navigateToLocation(state.currentLocationIndex - 1);
         }
+      });
 
-        // Render a specific page on-demand (lazy rendering)
-        async function renderPage(i, pageDiv) {
-            if (!pdfDoc) return;
-            if (pageDiv.dataset.rendered) return;
-            try {
-                const page = await pdfDoc.getPage(i);
-                const viewport = page.getViewport({ scale: 1.5 });
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-
-                // Clear placeholder and insert canvas
-                pageDiv.innerHTML = '';
-                pageDiv.appendChild(canvas);
-
-                await page.render({ canvasContext: context, viewport: viewport }).promise;
-                pageDiv.dataset.rendered = 'true';
-            } catch (err) {
-                console.error('renderPage error for', i, err);
-                pageDiv.innerHTML = `<div class="text-center py-20 text-red-400">Failed to render page ${i}</div>`;
-            }
+    document
+      .getElementById("next-marker")
+      .addEventListener("click", () => {
+        if (
+          state.currentLocationIndex <
+          state.allLocations.length - 1
+        ) {
+          navigateToLocation(state.currentLocationIndex + 1);
         }
+      });
 
-        // Populate page select list based on rendered pages (up to rendered max)
-        function populatePageSelect() {
-            // Clear existing options
-            pageSelect.innerHTML = '';
-            const renderedPages = Math.min(numPages, renderCap);
-            for (let i = 1; i <= renderedPages; i++) {
-                const opt = document.createElement('option');
-                opt.value = String(i);
-                opt.textContent = `Page ${i}`;
-                pageSelect.appendChild(opt);
-            }
-            pageSelect.value = String(activePage || 1);
-        }
+    document
+      .getElementById("timeline-bar")
+      .addEventListener("click", (e) => {
+        if (!state.allLocations.length) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const percent = (e.clientX - rect.left) / rect.width;
+        const targetIndex = Math.floor(percent * state.allLocations.length);
+        navigateToLocation(
+          Math.min(targetIndex, state.allLocations.length - 1)
+        );
+      });
 
-        // Persistence helpers: save/load FeatureGroup as GeoJSON in localStorage per page
-        function savePageTracesToStorage(page) {
-            try {
-                if (!pageTraces[page]) return;
-                const features = pageTraces[page].getLayers().map(l => l.toGeoJSON());
-                const fc = { type: 'FeatureCollection', features };
-                localStorage.setItem(`histo_traces_page_${page}`, JSON.stringify(fc));
-            } catch (err) {
-                console.error('savePageTracesToStorage error', err);
-            }
-        }
+    document
+      .getElementById("pdf-viewer")
+      .addEventListener("scroll", updateReadingProgress);
 
-        function loadPageTracesFromStorage(page) {
-            try {
-                const key = `histo_traces_page_${page}`;
-                const raw = localStorage.getItem(key);
-                if (!raw) return;
-                const geojson = JSON.parse(raw);
-                if (!geojson || geojson.type !== 'FeatureCollection') return;
-                if (!pageTraces[page]) pageTraces[page] = L.featureGroup();
-                L.geoJSON(geojson, {
-                    onEachFeature: function (feature, layer) {
-                        pageTraces[page].addLayer(layer);
-                    }
-                });
-            } catch (err) {
-                console.error('loadPageTracesFromStorage error', err);
-            }
-        }
-
-        // Utility: deep clone a Leaflet layer (supports marker, polyline, polygon)
-        function cloneLayer(layer) {
-            const gj = layer.toGeoJSON();
-            let cloned = null;
-            if (gj.geometry.type === 'Point') {
-                cloned = L.marker([gj.geometry.coordinates[1], gj.geometry.coordinates[0]]);
-            } else if (gj.geometry.type === 'LineString') {
-                const coords = gj.geometry.coordinates.map(c => [c[1], c[0]]);
-                cloned = L.polyline(coords);
-            } else if (gj.geometry.type === 'Polygon') {
-                const coords = gj.geometry.coordinates.map(ring => ring.map(c => [c[1], c[0]]));
-                cloned = L.polygon(coords);
-            } else {
-                // fallback: try GeoJSON layer
-                cloned = L.geoJSON(gj).getLayers()[0];
-            }
-            // copy properties (popup content if present)
-            if (gj.properties && gj.properties.popup) cloned.bindPopup(gj.properties.popup);
-            return cloned;
-        }
-
-        function wirePageUiButtons() {
-            // Navigate to page when selected
-            pageSelect.addEventListener('change', (e) => {
-                const p = parseInt(e.target.value, 10);
-                navigateToPage(p);
-            });
-
-            // Auto-save toggle UI wiring
-            const autoSaveBtn = document.getElementById('auto-save-btn');
-            if (autoSaveBtn) {
-                autoSaveBtn.addEventListener('click', () => {
-                    autoSave = !autoSave;
-                    autoSaveBtn.textContent = autoSave ? 'AutoSave: On' : 'AutoSave: Off';
-                });
-                autoSaveBtn.textContent = autoSave ? 'AutoSave: On' : 'AutoSave: Off';
-            }
-
-            clearPageBtn.addEventListener('click', () => {
-                const p = parseInt(pageSelect.value, 10);
-                if (confirm(`Clear traces for page ${p}? This cannot be undone.`)) {
-                    clearPageTraces(p);
-                    updateMapForActivePage();
-                }
-            });
-
-            exportPageBtn.addEventListener('click', () => {
-                const p = parseInt(pageSelect.value, 10);
-                exportPageGeoJSON(p);
-            });
-
-            exportAllBtn.addEventListener('click', () => {
-                exportAllGeoJSON();
-            });
-
-            importBtn.addEventListener('click', () => {
-                importInput.click();
-            });
-
-            importInput.addEventListener('change', async (e) => {
-                if (!e.target.files || e.target.files.length === 0) return;
-                const file = e.target.files[0];
-                try {
-                    const text = await file.text();
-                    const json = JSON.parse(text);
-                    // Import into currently selected page
-                    const p = parseInt(pageSelect.value, 10);
-                    importGeoJSONToPage(json, p);
-                    updateMapForActivePage();
-                    alert('Import successful');
-                } catch (err) {
-                    console.error('Import error:', err);
-                    alert('Failed to import GeoJSON');
-                }
-            });
-        }
-
-        // Clear traces for a page
-        function clearPageTraces(page) {
-            if (!pageTraces[page]) return;
-            pageTraces[page].clearLayers();
-        }
-
-        // Export traces for a page as GeoJSON file
-        function exportPageGeoJSON(page) {
-            const fg = pageTraces[page];
-            if (!fg || fg.getLayers().length === 0) {
-                alert('No traces on this page to export');
-                return;
-            }
-            const features = fg.getLayers().map(layer => layer.toGeoJSON());
-            const fc = {
-                type: 'FeatureCollection',
-                features
-            };
-            downloadJSON(fc, `page-${page}-traces.geojson`);
-        }
-
-        // Export all pages' traces as a single GeoJSON with property `page`
-        function exportAllGeoJSON() {
-            const features = [];
-            const renderedPages = Math.min(numPages, renderCap);
-            for (let p = 1; p <= renderedPages; p++) {
-                const fg = pageTraces[p];
-                if (!fg) continue;
-                fg.getLayers().forEach(layer => {
-                    const gj = layer.toGeoJSON();
-                    // attach page property
-                    if (!gj.properties) gj.properties = {};
-                    gj.properties.page = p;
-                    features.push(gj);
-                });
-            }
-            if (features.length === 0) {
-                alert('No traces to export');
-                return;
-            }
-            const fc = { type: 'FeatureCollection', features };
-            downloadJSON(fc, `all-pages-traces.geojson`);
-        }
-
-        function downloadJSON(obj, filename) {
-            const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-        }
-
-        // Import GeoJSON FeatureCollection into a page (adds layers to pageTraces[page])
-        function importGeoJSONToPage(geojson, page) {
-            if (!geojson || geojson.type !== 'FeatureCollection') throw new Error('Invalid GeoJSON');
-            if (!pageTraces[page]) pageTraces[page] = L.featureGroup();
-            L.geoJSON(geojson, {
-                onEachFeature: function (feature, layer) {
-                    pageTraces[page].addLayer(layer);
-                }
-            });
-        }
-
-        // Assign a newly drawn layer to the current page (or spread pages depending on mode)
-        function assignLayerToCurrentPage(layer) {
-            // remove from drawnItems (temporary)
-            if (drawnItems.hasLayer(layer)) drawnItems.removeLayer(layer);
-
-            const pagesToAssign = getPagesForActive();
-            pagesToAssign.forEach(p => {
-                if (!pageTraces[p]) pageTraces[p] = L.featureGroup();
-                pageTraces[p].addLayer(layer.clone ? layer.clone() : layer);
-            });
-
-            // ensure the map display is updated
-            updateMapForActivePage();
-        }
-
-        // Return array of pages considered active depending on single/spread mode
-        function getPagesForActive() {
-            if (traceDisplayMode === 'spread') {
-                const arr = [activePage];
-                if (activePage + 1 <= numPages) arr.push(activePage + 1);
-                return arr;
-            }
-            return [activePage];
-        }
-
-        // Update map to show only markers/traces for active page(s)
-        function updateMapForActivePage() {
-            // Clear all pageMarkers and pageTraces from the map
-            for (let p = 1; p <= Math.max(1, numPages); p++) {
-                if (pageMarkers[p] && map.hasLayer(pageMarkers[p])) map.removeLayer(pageMarkers[p]);
-                if (pageTraces[p] && map.hasLayer(pageTraces[p])) map.removeLayer(pageTraces[p]);
-            }
-
-            // Add markers/traces for pages we want
-            const pages = getPagesForActive();
-            let targetBounds = null;
-            pages.forEach(p => {
-                if (pageMarkers[p]) {
-                    pageMarkers[p].addTo(map);
-                    if (!targetBounds && pageMarkers[p].getBounds && pageMarkers[p].getLayers().length) targetBounds = pageMarkers[p].getBounds();
-                }
-                if (pageTraces[p]) {
-                    pageTraces[p].addTo(map);
-                    if (!targetBounds && pageTraces[p].getBounds && pageTraces[p].getLayers().length) targetBounds = pageTraces[p].getBounds();
-                }
-            });
-
-            // Make current page traces editable: reset drawnItems to include current page layers
-            try {
-                drawnItems.clearLayers();
-                pages.forEach(p => {
-                    if (pageTraces[p]) pageTraces[p].getLayers().forEach(l => drawnItems.addLayer(cloneLayer(l)));
-                });
-            } catch (err) { console.error('updateMapForActivePage editable sync error', err); }
-
-            // Update timeline UI based on first matching timeline item
-            const firstTimeline = timelineData.find(item => pages.includes(item.page));
-            if (firstTimeline) {
-                // Fly to first timeline location for the current pages
-                // If there are traces/markers, fit bounds to them; otherwise fly to timeline location
-                if (targetBounds && targetBounds.isValid && targetBounds.isValid()) {
-                    map.flyTo(targetBounds.getCenter(), 6, { duration: 1 });
-                } else {
-                    map.flyTo(firstTimeline.location, 6, { duration: 1 });
-                }
-                timelineMarker.classList.remove('hidden');
-                locationDot.classList.remove('hidden');
-                const point = map.latLngToContainerPoint(firstTimeline.location);
-                locationDot.style.left = `${point.x}px`;
-                locationDot.style.top = `${point.y}px`;
-                currentYear.textContent = firstTimeline.year;
-            } else {
-                timelineMarker.classList.add('hidden');
-                locationDot.classList.add('hidden');
-                currentYear.textContent = '--';
-            }
-
-            // progress relative to numPages (cap guard)
-            if (numPages > 0) {
-                const progress = (activePage / Math.max(1, Math.min(numPages, 50))) * 100;
-                timelineProgress.style.width = `${progress}%`;
-            }
-        }
-
-        // Enable draw controls on the map
-        function enableTraceMode() {
-            if (drawControl && !map.hasControl) {
-                map.addControl(drawControl);
-            }
-            // show existing page traces for the active page(s)
-            updateMapForActivePage();
-        }
-
-        // Disable draw controls
-        function disableTraceMode() {
-            if (drawControl) {
-                try { map.removeControl(drawControl); } catch (e) { /* ignore */ }
-            }
-            // still display page markers/traces, but drawing disabled
-            updateMapForActivePage();
-        }
-
-        // Setup scroll events to update map
-        function setupScrollEvents() {
-            const pdfViewer = document.getElementById('pdf-viewer');
-            const pages = () => document.querySelectorAll('.pdf-page');
-
-            // initial active page
-            activePage = 1;
-            updateMapForActivePage();
-
-            pdfViewer.addEventListener('scroll', () => {
-                const pageNodes = pages();
-                if (!pageNodes || pageNodes.length === 0) return;
-                const scrollPosition = pdfViewer.scrollTop + pdfViewer.clientHeight / 2;
-                let newActive = activePage;
-
-                // Find which page is currently at the center of the viewport
-                pageNodes.forEach(page => {
-                    const pageTop = page.offsetTop;
-                    const pageBottom = pageTop + page.offsetHeight;
-
-                    if (scrollPosition >= pageTop && scrollPosition <= pageBottom) {
-                        newActive = parseInt(page.dataset.pageNumber);
-                    }
-                });
-
-                if (newActive !== activePage) {
-                    activePage = newActive;
-                    updateMapForActivePage();
-                }
-            });
-
-            // Prev/Next button handlers
-            prevMarkerBtn.addEventListener('click', () => {
-                navigateToPage(activePage - 1);
-            });
-
-            nextMarkerBtn.addEventListener('click', () => {
-                navigateToPage(activePage + 1);
-            });
-        }
-
-        async function navigateToPage(pageNum) {
-            if (pageNum < 1) pageNum = 1;
-            if (pageNum > Math.min(numPages, renderCap)) pageNum = Math.min(numPages, renderCap);
-            const target = document.querySelector(`.pdf-page[data-page-number='${pageNum}']`);
-            if (target) {
-                // ensure page is rendered before scrolling
-                try { await renderPage(pageNum, target); } catch (e) { /* continue */ }
-                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // activePage will be updated by scroll listener; but set immediately to keep UI responsive
-                activePage = pageNum;
-                updateMapForActivePage();
-            }
-        }
-
-        // Initialize
-        feather.replace();
-
-        // Handle mobile viewport height
-        function setViewportHeight() {
-            let vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-        }
-        
-        setViewportHeight();
-        window.addEventListener('resize', setViewportHeight);
-</script>
+    // Init
+    initMap();
+    initResizer();
+    feather.replace();
+    console.log("ScrollThroughTime initialized");
+  </script>
 </body>
 </html>
