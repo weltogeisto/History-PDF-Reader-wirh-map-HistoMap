@@ -530,8 +530,7 @@
         // Canvas container
         const canvasContainer = document.createElement("div");
         canvasContainer.style.position = "relative";
-        canvasContainer.style.width = viewport.width + "px";
-        canvasContainer.style.height = viewport.height + "px";
+        canvasContainer.style.width = "100%";
 
         // Canvas
         const canvas = document.createElement("canvas");
@@ -547,20 +546,30 @@
         const textOverlay = document.createElement("div");
         textOverlay.className = "text-overlay";
 
+        // Ensure overlay matches the rendered (scaled) canvas size
+        const displayScale = canvas.clientWidth / viewport.width;
+        const displayHeight = viewport.height * displayScale;
+        canvasContainer.style.height = displayHeight + "px";
+        textOverlay.style.width = canvas.clientWidth + "px";
+        textOverlay.style.height = displayHeight + "px";
+        textOverlay.dataset.viewportWidth = viewport.width;
+        textOverlay.dataset.viewportHeight = viewport.height;
+
         const textContent = await page.getTextContent();
 
         textContent.items.forEach((item) => {
           const rawText = (item.str || "").trim();
           if (!rawText) return;
 
-          const transform = item.transform || [];
-          const x = transform[4] || 0;
-          const y = viewport.height - (transform[5] || 0);
-          const fontHeight = Math.sqrt(
-            (transform[2] || 0) * (transform[2] || 0) +
-              (transform[3] || 0) * (transform[3] || 0)
+          const rawTransform = item.transform || [];
+          const transform = pdfjsLib.Util.transform(
+            viewport.transform,
+            rawTransform
           );
+          const fontHeight = Math.hypot(transform[1] || 0, transform[3] || 0);
           const textWidthPx = (item.width || 0) * viewport.scale;
+          const leftBase = transform[4] || 0;
+          const topBase = (transform[5] || 0) - fontHeight;
 
           Object.keys(geoDatabase).forEach((location) => {
             const regex = new RegExp(`\\b${location}\\b`, "gi");
@@ -574,17 +583,23 @@
               const startFraction = startIndex / textLength;
               const widthFraction = wordLength / textLength;
 
-              const highlightWidth = textWidthPx * widthFraction;
-              const leftOffset = x + textWidthPx * startFraction;
-              const highlightHeight = fontHeight || 14;
+              const highlightWidthBase = textWidthPx * widthFraction;
+              const leftOffsetBase = leftBase + textWidthPx * startFraction;
+              const highlightHeightBase = fontHeight || 14;
+              const topOffsetBase = topBase;
 
               const highlight = document.createElement("div");
               highlight.className = "location-badge";
               highlight.dataset.location = location;
-              highlight.style.left = leftOffset + "px";
-              highlight.style.top = y - highlightHeight + "px";
-              highlight.style.width = highlightWidth + "px";
-              highlight.style.height = highlightHeight + "px";
+              highlight.dataset.left = leftOffsetBase;
+              highlight.dataset.top = topOffsetBase;
+              highlight.dataset.width = highlightWidthBase;
+              highlight.dataset.height = highlightHeightBase;
+
+              highlight.style.left = leftOffsetBase * displayScale + "px";
+              highlight.style.top = topOffsetBase * displayScale + "px";
+              highlight.style.width = highlightWidthBase * displayScale + "px";
+              highlight.style.height = highlightHeightBase * displayScale + "px";
               highlight.title = "Click to view location on map";
 
               highlight.onclick = () => handleLocationClick(location, highlight);
@@ -608,6 +623,7 @@
 
       console.log("Total locations found:", state.allLocations.length);
       updateTimeline();
+      rescaleOverlays();
     }
 
     function updateTimeline() {
@@ -627,6 +643,37 @@
         100;
       document.getElementById("timeline-progress").style.width =
         progress + "%";
+    }
+
+    function rescaleOverlays() {
+      document.querySelectorAll(".pdf-page-wrapper").forEach((wrapper) => {
+        const canvas = wrapper.querySelector("canvas");
+        const overlay = wrapper.querySelector(".text-overlay");
+        const canvasContainer = canvas?.parentElement;
+
+        if (!canvas || !overlay || !canvasContainer) return;
+
+        const viewportWidth = Number(overlay.dataset.viewportWidth) || 1;
+        const viewportHeight = Number(overlay.dataset.viewportHeight) || 1;
+        const displayScale = canvas.clientWidth / viewportWidth;
+        const displayHeight = viewportHeight * displayScale;
+
+        overlay.style.width = canvas.clientWidth + "px";
+        overlay.style.height = displayHeight + "px";
+        canvasContainer.style.height = displayHeight + "px";
+
+        overlay.querySelectorAll(".location-badge").forEach((badge) => {
+          const left = Number(badge.dataset.left) || 0;
+          const top = Number(badge.dataset.top) || 0;
+          const width = Number(badge.dataset.width) || 0;
+          const height = Number(badge.dataset.height) || 0;
+
+          badge.style.left = left * displayScale + "px";
+          badge.style.top = top * displayScale + "px";
+          badge.style.width = width * displayScale + "px";
+          badge.style.height = height * displayScale + "px";
+        });
+      });
     }
 
     function navigateToLocation(index) {
@@ -811,6 +858,8 @@
           if (state.map) {
             state.map.invalidateSize();
           }
+
+          rescaleOverlays();
         }
       }
 
@@ -889,6 +938,8 @@
     document
       .getElementById("pdf-viewer")
       .addEventListener("scroll", updateReadingProgress);
+
+    window.addEventListener("resize", rescaleOverlays);
 
     // Init
     initMap();
