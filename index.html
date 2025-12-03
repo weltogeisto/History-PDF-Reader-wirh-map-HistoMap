@@ -560,9 +560,7 @@
             (transform[2] || 0) * (transform[2] || 0) +
               (transform[3] || 0) * (transform[3] || 0)
           );
-          const baseWidth = (item.width || 0) * viewport.scale;
-          const avgCharWidth =
-            rawText.length > 0 ? baseWidth / rawText.length : 0;
+          const textWidthPx = (item.width || 0) * viewport.scale;
 
           Object.keys(geoDatabase).forEach((location) => {
             const regex = new RegExp(`\\b${location}\\b`, "gi");
@@ -571,11 +569,13 @@
             Array.from(matches).forEach((match) => {
               const startIndex = match.index || 0;
               const wordLength = match[0].length;
-              const highlightWidth = Math.max(
-                avgCharWidth * wordLength,
-                location.length * 6
-              );
-              const leftOffset = x + startIndex * avgCharWidth;
+              const textLength = rawText.length || 1;
+
+              const startFraction = startIndex / textLength;
+              const widthFraction = wordLength / textLength;
+
+              const highlightWidth = textWidthPx * widthFraction;
+              const leftOffset = x + textWidthPx * startFraction;
               const highlightHeight = fontHeight || 14;
 
               const highlight = document.createElement("div");
