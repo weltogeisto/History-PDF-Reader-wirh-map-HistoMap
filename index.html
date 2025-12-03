@@ -101,32 +101,38 @@
     }
     .location-badge {
       position: absolute;
-      background: rgba(254, 243, 199, 0.95);
-      border: 2px solid #f59e0b;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      color: #92400e;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1.5px solid rgba(59, 130, 246, 0.6);
+      border-radius: 4px;
       cursor: pointer;
       pointer-events: auto;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25);
+    }
+    .location-badge::after {
+      content: attr(data-location);
+      position: absolute;
+      top: -18px;
+      left: 0;
+      background: rgba(59, 130, 246, 0.9);
+      color: white;
+      padding: 2px 6px;
+      font-size: 10px;
+      border-radius: 4px;
       white-space: nowrap;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
     }
     .location-badge:hover {
-      background: rgba(251, 191, 36, 1);
-      transform: scale(1.1) translateY(-2px);
-      box-shadow: 0 4px 8px rgba(245, 158, 11, 0.4);
+      background: rgba(59, 130, 246, 0.25);
+      transform: scale(1.03);
+      box-shadow: 0 3px 8px rgba(59, 130, 246, 0.35);
       z-index: 10;
     }
     .location-badge.active {
-      background: rgba(239, 68, 68, 0.95);
-      border-color: #dc2626;
-      color: white;
-      transform: scale(1.15) translateY(-2px);
+      background: rgba(239, 68, 68, 0.25);
+      border-color: rgba(239, 68, 68, 0.75);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.45);
       z-index: 15;
-      box-shadow: 0 6px 12px rgba(239, 68, 68, 0.5);
     }
 
     /* Resize handle */
@@ -339,6 +345,8 @@
       allLocations: [],
       currentLocationIndex: 0,
       isResizing: false,
+      activeMapMarker: null,
+      activeRegionPolygon: null,
     };
 
     // Geo database
@@ -448,6 +456,20 @@
 
       if (!state.autoMap || !state.map) return;
 
+      // Clear existing map highlights
+      if (state.activeMapMarker) {
+        state.map.removeLayer(state.activeMapMarker);
+        state.activeMapMarker = null;
+      }
+      if (state.activeRegionPolygon) {
+        state.activeRegionPolygon.setStyle({
+          fillOpacity: 0,
+          opacity: 0,
+          weight: 2,
+        });
+        state.activeRegionPolygon = null;
+      }
+
       // Handle region polygons vs points
       const regionDef = regionPolygons[locationName];
       if (regionDef) {
@@ -455,16 +477,16 @@
           (p) => p.regionName === locationName
         );
         if (poly) {
-          poly.setStyle({ fillOpacity: 0.3, opacity: 0.8 });
-          state.map.fitBounds(poly.getBounds());
-          setTimeout(
-            () =>
-              poly.setStyle({
-                fillOpacity: 0,
-                opacity: 0,
-              }),
-            3000
+          state.regionPolygons.forEach((p) =>
+            p.setStyle({ fillOpacity: 0, opacity: 0, weight: 2 })
           );
+          poly.setStyle({
+            fillOpacity: 0.35,
+            opacity: 0.9,
+            weight: 3,
+          });
+          state.activeRegionPolygon = poly;
+          state.map.fitBounds(poly.getBounds());
         }
       } else {
         state.map.setView(coords, 8);
@@ -479,7 +501,7 @@
           .bindPopup("<b>" + locationName + "</b>")
           .openPopup();
 
-        setTimeout(() => state.map.removeLayer(marker), 4000);
+        state.activeMapMarker = marker;
       }
     }
 
@@ -526,41 +548,56 @@
         textOverlay.className = "text-overlay";
 
         const textContent = await page.getTextContent();
-        const foundLocations = new Set();
 
         textContent.items.forEach((item) => {
           const rawText = (item.str || "").trim();
           if (!rawText) return;
 
+          const transform = item.transform || [];
+          const x = transform[4] || 0;
+          const y = viewport.height - (transform[5] || 0);
+          const fontHeight = Math.sqrt(
+            (transform[2] || 0) * (transform[2] || 0) +
+              (transform[3] || 0) * (transform[3] || 0)
+          );
+          const baseWidth = (item.width || 0) * viewport.scale;
+          const avgCharWidth =
+            rawText.length > 0 ? baseWidth / rawText.length : 0;
+
           Object.keys(geoDatabase).forEach((location) => {
-            const regex = new RegExp(location, "i");
-            const key = location + "@p" + pageNum;
-            if (regex.test(rawText) && !foundLocations.has(key)) {
-              foundLocations.add(key);
+            const regex = new RegExp(`\\b${location}\\b`, "gi");
+            const matches = rawText.matchAll(regex);
 
-              const transform = item.transform || [];
-              const x = transform[4] || 0;
-              const y = viewport.height - (transform[5] || 0);
+            Array.from(matches).forEach((match) => {
+              const startIndex = match.index || 0;
+              const wordLength = match[0].length;
+              const highlightWidth = Math.max(
+                avgCharWidth * wordLength,
+                location.length * 6
+              );
+              const leftOffset = x + startIndex * avgCharWidth;
+              const highlightHeight = fontHeight || 14;
 
-              const badge = document.createElement("div");
-              badge.className = "location-badge";
-              badge.textContent = location;
-              badge.dataset.location = location;
-              badge.style.left = x + "px";
-              badge.style.top = y - 22 + "px";
-              badge.title = "Click to view location on map";
+              const highlight = document.createElement("div");
+              highlight.className = "location-badge";
+              highlight.dataset.location = location;
+              highlight.style.left = leftOffset + "px";
+              highlight.style.top = y - highlightHeight + "px";
+              highlight.style.width = highlightWidth + "px";
+              highlight.style.height = highlightHeight + "px";
+              highlight.title = "Click to view location on map";
 
-              badge.onclick = () => handleLocationClick(location, badge);
+              highlight.onclick = () => handleLocationClick(location, highlight);
 
-              textOverlay.appendChild(badge);
+              textOverlay.appendChild(highlight);
 
               // Track for timeline
               state.allLocations.push({
                 name: location,
-                element: badge,
+                element: highlight,
                 page: pageNum,
               });
-            }
+            });
           });
         });
 
