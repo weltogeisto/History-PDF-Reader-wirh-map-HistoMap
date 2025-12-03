@@ -1,36 +1,74 @@
-History PDF Reader — Multi-page & Map Tracing
+# ScrollThroughTime — History PDF Reader with Interactive Map
 
-Kurzbeschreibung
+**A mobile-optimized tool for reading historical documents with real-time geographic visualization.**
 
-Dieses kleine Demo-Tool ermöglicht das Laden eines PDFs (bis zu einem Render-Limit), gleichzeitiges Betrachten der Seiten und synchronisierte Karte (Leaflet). Zusätzlich können pro Seite Map-Traces gezeichnet, exportiert und importiert werden (GeoJSON).
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://weltogeisto.github.io/History-PDF-Reader-wirh-map-HistoMap/)
 
-Wichtigste Funktionen
+## 🌟 Features
 
-- PDF-Rendering (PDF.js) — rendert bis zu 50 Seiten standardmäßig, um Browser-Blockaden zu vermeiden.
-- Karte mit Leaflet und Zeichentools via Leaflet.Draw.
-- Per-Page Traces: Jedes gezeichnete Objekt wird der aktuell aktiven Seite zugeordnet (oder beiden Seiten im Spread-Modus).
-- UI: Seiten-Auswahl, Clear Page, Export Page (GeoJSON), Export All, Import GeoJSON.
+### 📍 Smart Location Detection
+- **Auto-detects 100+ historical locations** including cities, battles, regions, and rivers
+- **Context-aware mapping**: "Danube near Serbia" → automatically shows Belgrade segment
+- **One location per page** highlighting for clean, uncluttered reading
+- **Historical events**: Recognizes battles, sieges, and campaigns
 
-Bekannte Limitierungen
+### 🗺️ Interactive Mapping
+- **Synchronized map & text**: Click any location to jump to it on the map
+- **Journey playback**: Animate through your document's geographic narrative
+- **Drawing tools**: Trace military campaigns, borders, or routes
+- **Multiple base maps**: OpenStreetMap, Satellite, Terrain
 
-- Maximal gerenderte Seiten: 50 (konfigurierbar im Code). Für größere PDFs sollte Lazy-Loading implementiert werden.
-- Editieren bereits gezeichneter Traces ist nicht vollständig integriert; Zeichnen erstellt neue Layer, die beim Export enthalten sind.
-- Importierte GeoJSON-Features werden der aktuell ausgewählten Seite hinzugefügt.
+### 📄 PDF Processing
+- **Renders up to 50 pages** (configurable)
+- **Page-by-page navigation** with thumbnail view
+- **Spread mode** for viewing two pages simultaneously
 
-Kurzanleitung
+### 📷 OCR Support
+- **Scan images** and convert to searchable, mappable text
+- **Supports JPEG, PNG** and other common formats
+- **Auto-processes** detected locations after OCR
 
-1. Öffne `index.html` in einem Browser (lokaler Webserver empfehlenswert).
-2. Klicke "Upload PDF" und wähle ein PDF (empfohlen: unter 50 Seiten für flüssige Nutzung).
-3. Nutze die Seitenliste, um zu einer Seite zu springen.
-4. Aktiviere "Trace: On" und zeichne mit den Leaflet.Draw Werkzeugen auf der Karte.
-5. Wähle "Single Page" oder "Spread" um Traces einer Seite oder einer Seitenspanne zuzuordnen.
-6. Exportiere die Traces einer Seite (GeoJSON) oder alle Seiten zusammen.
-7. Zum Import: klicke "Import" und wähle eine GeoJSON-Datei; die Features werden der aktuell ausgewählten Seite hinzugefügt.
+### 📤 Export Options
+- **GeoJSON**: For GIS applications
+- **KML**: For Google Earth
+- **CSV**: For spreadsheet analysis
+- **Per-page or bulk export**
 
-Weiteres / Vorschläge
+### 📱 Mobile-Ready
+- **PWA installable** — works offline
+- **Swipe gestures** for page navigation
+- **Touch-optimized** map controls
+- **Responsive layout** adapts to any screen
 
-- Lazy-rendering für sehr große PDFs (render-on-demand beim Scrollen) — empfohlen für Produktions-Workloads.
-- Vollständiges Editieren/Versionierung von Traces, sowie ein UI zum Verwalten vieler Seiten-Traces (Suche, Bulk-Export).
-- Persistenz (lokal oder Server) für langfristige Projekte.
+---
 
-Viel Erfolg beim Testen — gib Bescheid, wenn du möchtest, dass ich Lazy-Loading oder Import/Export-Verbesserungen implementiere.
+## 🚀 Quick Start
+
+### Online
+Visit: **[https://weltogeisto.github.io/History-PDF-Reader-wirh-map-HistoMap/](https://weltogeisto.github.io/History-PDF-Reader-wirh-map-HistoMap/)**
+
+### Local
+1. Download `index.html`
+2. Open in any modern browser (Chrome, Firefox, Safari, Edge)
+3. Upload a PDF or scan an image with OCR
+
+---
+
+## 📖 Usage Guide
+
+### Basic Workflow
+1. **Upload PDF**: Click "Choose PDF" and select a historical document
+2. **Auto-detection**: Locations are automatically highlighted and mapped
+3. **Navigate**: Click highlighted locations or use page selector
+4. **Toggle Auto**: Turn off to read without map jumping
+5. **Draw traces**: Use toolbar to mark routes, regions, or events
+6. **Export**: Save your annotations as GeoJSON/KML/CSV
+
+### Controls
+| Button | Function |
+|--------|----------|
+| **Auto** | Auto-sync map to clicked locations (ON/OFF) |
+| **OCR** | Scan an image and extract text |
+| **Journey** | Animate through all detected locations |
+| **Export** | Download map data in multiple formats |
+| **Clear** | Remove all current-page drawings |
