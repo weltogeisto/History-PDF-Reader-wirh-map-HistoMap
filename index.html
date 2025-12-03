@@ -25,7 +25,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 
   <style>
-    /* Reset / base */
     * {
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
@@ -37,7 +36,6 @@
       overscroll-behavior: none;
     }
 
-    /* Reading progress bar */
     .reading-progress {
       position: fixed;
       top: 0;
@@ -49,7 +47,6 @@
       transition: width 0.2s;
     }
 
-    /* Layout */
     #pdf-viewer {
       overflow-y: auto;
       background: #f9fafb;
@@ -62,7 +59,6 @@
       height: 100%;
     }
 
-    /* PDF pages */
     .pdf-container {
       max-width: 100%;
       padding: 20px;
@@ -89,7 +85,6 @@
       border-bottom: 1px solid #e5e7eb;
     }
 
-    /* Text overlay / location badges */
     .text-overlay {
       position: absolute;
       top: 0;
@@ -99,51 +94,69 @@
       pointer-events: none;
       z-index: 5;
     }
+
+    /* Fixed: Simple highlight without duplicate label */
     .location-badge {
       position: absolute;
-      background: rgba(59, 130, 246, 0.15);
-      border: 1.5px solid rgba(59, 130, 246, 0.6);
-      border-radius: 4px;
+      background: rgba(59, 130, 246, 0.25);
+      border-bottom: 2px solid rgba(59, 130, 246, 0.8);
+      border-radius: 2px;
       cursor: pointer;
       pointer-events: auto;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25);
-    }
-    .location-badge::after {
-      content: attr(data-location);
-      position: absolute;
-      top: -18px;
-      left: 0;
-      background: rgba(59, 130, 246, 0.9);
-      color: white;
-      padding: 2px 6px;
-      font-size: 10px;
-      border-radius: 4px;
-      white-space: nowrap;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
     }
     .location-badge:hover {
-      background: rgba(59, 130, 246, 0.25);
-      transform: scale(1.03);
-      box-shadow: 0 3px 8px rgba(59, 130, 246, 0.35);
+      background: rgba(59, 130, 246, 0.4);
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
       z-index: 10;
     }
     .location-badge.active {
-      background: rgba(239, 68, 68, 0.25);
-      border-color: rgba(239, 68, 68, 0.75);
-      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.45);
+      background: rgba(239, 68, 68, 0.35);
+      border-bottom-color: rgba(239, 68, 68, 0.9);
+      box-shadow: 0 2px 10px rgba(239, 68, 68, 0.5);
       z-index: 15;
     }
+    
+    /* Region badge styling (for Anatolia, Balkans, etc.) */
+    .location-badge.region-badge {
+      background: rgba(139, 92, 246, 0.25);
+      border-bottom-color: rgba(139, 92, 246, 0.8);
+    }
+    .location-badge.region-badge:hover {
+      background: rgba(139, 92, 246, 0.4);
+      box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+    }
+    .location-badge.region-badge.active {
+      background: rgba(139, 92, 246, 0.5);
+      border-bottom-color: rgba(139, 92, 246, 1);
+      box-shadow: 0 2px 10px rgba(139, 92, 246, 0.6);
+    }
 
-    /* Resize handle */
+    /* Tooltip on hover */
+    .location-badge::before {
+      content: attr(data-location);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%) translateY(-4px);
+      background: rgba(30, 41, 59, 0.95);
+      color: white;
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 4px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 20;
+    }
+    .location-badge:hover::before {
+      opacity: 1;
+    }
+
     .resize-handle {
       display: none;
-      background: linear-gradient(
-        to right,
-        #e5e7eb 0%,
-        #9ca3af 50%,
-        #e5e7eb 100%
-      );
+      background: linear-gradient(to right, #e5e7eb 0%, #9ca3af 50%, #e5e7eb 100%);
       cursor: ew-resize;
       z-index: 20;
       touch-action: none;
@@ -158,7 +171,6 @@
       transform: translate(-50%, -50%);
     }
 
-    /* Desktop: side-by-side, vertical resize handle */
     @media (min-width: 769px) {
       #pdf-viewer,
       #map-container {
@@ -172,7 +184,6 @@
       }
     }
 
-    /* Mobile: stacked, horizontal resize handle */
     @media (max-width: 768px) {
       nav {
         position: relative !important;
@@ -199,12 +210,7 @@
         display: block;
         width: 100%;
         height: 10px;
-        background: linear-gradient(
-          to bottom,
-          #e5e7eb 0%,
-          #9ca3af 50%,
-          #e5e7eb 100%
-        );
+        background: linear-gradient(to bottom, #e5e7eb 0%, #9ca3af 50%, #e5e7eb 100%);
         cursor: ns-resize;
         position: relative;
       }
@@ -213,7 +219,6 @@
       }
     }
 
-    /* Timeline controls */
     .timeline-controls {
       width: 90%;
       padding: 0.5rem;
@@ -221,62 +226,32 @@
   </style>
 </head>
 <body class="bg-gray-100">
-  <!-- Reading Progress -->
   <div class="reading-progress" id="readingProgress"></div>
 
-  <!-- Nav -->
   <nav class="bg-white shadow-md fixed w-full z-10">
     <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
       <div class="flex justify-between h-auto md:h-16 py-2 md:py-0">
         <div class="flex items-center">
           <i data-feather="map" class="text-red-600 mr-2 w-5 h-5"></i>
-          <span class="text-lg md:text-xl font-bold text-gray-800">
-            ScrollThroughTime
-          </span>
+          <span class="text-lg md:text-xl font-bold text-gray-800">ScrollThroughTime</span>
         </div>
         <div class="flex items-center flex-wrap gap-2 nav-controls">
-          <button
-            id="upload-btn"
-            class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center text-sm"
-          >
-            <i data-feather="upload" class="mr-1 w-4 h-4"></i>
-            Upload
+          <button id="upload-btn" class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center text-sm">
+            <i data-feather="upload" class="mr-1 w-4 h-4"></i>Upload
           </button>
-          <button
-            id="generate-test-pdf"
-            class="px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition flex items-center text-sm"
-          >
-            <i data-feather="file-text" class="mr-1 w-4 h-4"></i>
-            Test
+          <button id="generate-test-pdf" class="px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition flex items-center text-sm">
+            <i data-feather="file-text" class="mr-1 w-4 h-4"></i>Test
           </button>
-          <button
-            id="auto-map-toggle"
-            class="px-3 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 transition text-sm"
-          >
-            Auto ON
-          </button>
-          <input
-            type="file"
-            id="pdf-input"
-            accept=".pdf"
-            class="hidden"
-          />
+          <button id="auto-map-toggle" class="px-3 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 transition text-sm">Auto ON</button>
+          <input type="file" id="pdf-input" accept=".pdf" class="hidden" />
         </div>
       </div>
     </div>
   </nav>
 
-  <!-- Main content -->
   <div class="pt-0 md:pt-16 pb-8 flex flex-col md:flex-row main-content">
-    <!-- PDF viewer -->
-    <div
-      id="pdf-viewer"
-      class="w-full md:w-1/2 h-screen overflow-y-auto bg-gray-50"
-    >
-      <div
-        id="pdf-placeholder"
-        class="text-center py-20 text-gray-500"
-      >
+    <div id="pdf-viewer" class="w-full md:w-1/2 h-screen overflow-y-auto bg-gray-50">
+      <div id="pdf-placeholder" class="text-center py-20 text-gray-500">
         <i data-feather="file" class="w-12 h-12 mx-auto mb-4"></i>
         <h3 class="text-xl font-medium">No PDF Loaded</h3>
         <p class="mt-2">Upload a PDF or click Test to begin</p>
@@ -284,54 +259,27 @@
       <div id="pdf-container" class="pdf-container hidden"></div>
     </div>
 
-    <!-- Resize handle -->
     <div id="resizeHandle" class="resize-handle"></div>
 
-    <!-- Map -->
-    <div
-      id="map-container"
-      class="w-full md:w-1/2 h-screen sticky top-16"
-    >
+    <div id="map-container" class="w-full md:w-1/2 h-screen sticky top-16">
       <div id="map"></div>
     </div>
   </div>
 
-  <!-- Timeline controls -->
-  <div
-    class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-3 rounded-lg shadow-xl flex items-center space-x-4 z-10 timeline-controls"
-  >
-    <button
-      id="prev-marker"
-      class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition"
-    >
+  <div class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-3 rounded-lg shadow-xl flex items-center space-x-4 z-10 timeline-controls">
+    <button id="prev-marker" class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition">
       <i data-feather="chevron-left" class="w-4 h-4"></i>
     </button>
-
-    <div
-      id="timeline-bar"
-      class="w-32 md:w-64 h-2 bg-gray-200 rounded-full relative cursor-pointer"
-    >
-      <div
-        id="timeline-progress"
-        class="absolute top-0 left-0 h-full bg-blue-600 rounded-full transition-all duration-300"
-        style="width: 0"
-      ></div>
+    <div id="timeline-bar" class="w-32 md:w-64 h-2 bg-gray-200 rounded-full relative cursor-pointer">
+      <div id="timeline-progress" class="absolute top-0 left-0 h-full bg-blue-600 rounded-full transition-all duration-300" style="width: 0"></div>
     </div>
-
-    <button
-      id="next-marker"
-      class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition"
-    >
+    <button id="next-marker" class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition">
       <i data-feather="chevron-right" class="w-4 h-4"></i>
     </button>
-
-    <span class="text-sm font-medium">
-      <span id="marker-counter">0/0</span>
-    </span>
+    <span class="text-sm font-medium"><span id="marker-counter">0/0</span></span>
   </div>
 
   <script>
-    // Ensure PDF.js worker is configured
     if (typeof window.pdfjsLib !== "undefined") {
       window.pdfjsLib.GlobalWorkerOptions.workerSrc =
         "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
@@ -349,67 +297,75 @@
       activeRegionPolygon: null,
     };
 
-    // Geo database
+    // Combined geo database with points AND regions
     const geoDatabase = {
-      Constantinople: [41.0082, 28.9784],
-      Istanbul: [41.0082, 28.9784],
-      Moscow: [55.7558, 37.6173],
-      Crimea: [45.0, 34.0],
-      "Black Sea": [43.0, 35.0],
-      Azov: [47.1, 39.4],
-      Sevastopol: [44.6167, 33.525],
-      Kiev: [50.4501, 30.5234],
-      Vienna: [48.2082, 16.3738],
-      Danube: [45.0, 29.0],
-      Volga: [55.0, 49.0],
-      Athens: [37.9838, 23.7275],
-      Varna: [43.2141, 27.9147],
-      Sofia: [42.6977, 23.3219],
-      Belgrade: [44.7866, 20.4489],
-      Bucharest: [44.4268, 26.1025],
-      Odessa: [46.4825, 30.7233],
-      Erzurum: [39.9, 41.2667],
-      Cairo: [30.0444, 31.2357],
-      Baghdad: [33.3152, 44.3661],
-      Damascus: [33.5138, 36.2765],
-      Mohacs: [45.9928, 18.6839],
-      Hungary: [47.1625, 19.5033],
-      German: [51.1657, 10.4515],
-      Germany: [51.1657, 10.4515],
-      Habsburg: [48.2082, 16.3738],
-      Austria: [47.5162, 14.5501],
-    };
-
-    const regionPolygons = {
+      // Cities/Points
+      Constantinople: { coords: [41.0082, 28.9784], type: "point" },
+      Istanbul: { coords: [41.0082, 28.9784], type: "point" },
+      Moscow: { coords: [55.7558, 37.6173], type: "point" },
+      Sevastopol: { coords: [44.6167, 33.525], type: "point" },
+      Kiev: { coords: [50.4501, 30.5234], type: "point" },
+      Vienna: { coords: [48.2082, 16.3738], type: "point" },
+      Athens: { coords: [37.9838, 23.7275], type: "point" },
+      Varna: { coords: [43.2141, 27.9147], type: "point" },
+      Sofia: { coords: [42.6977, 23.3219], type: "point" },
+      Belgrade: { coords: [44.7866, 20.4489], type: "point" },
+      Bucharest: { coords: [44.4268, 26.1025], type: "point" },
+      Odessa: { coords: [46.4825, 30.7233], type: "point" },
+      Erzurum: { coords: [39.9, 41.2667], type: "point" },
+      Cairo: { coords: [30.0444, 31.2357], type: "point" },
+      Baghdad: { coords: [33.3152, 44.3661], type: "point" },
+      Damascus: { coords: [33.5138, 36.2765], type: "point" },
+      Mohacs: { coords: [45.9928, 18.6839], type: "point" },
+      Azov: { coords: [47.1, 39.4], type: "point" },
+      
+      // Regions (polygon)
       Anatolia: {
-        coords: [
-          [36.0, 26.0],
-          [41.5, 26.0],
-          [42.0, 40.0],
-          [37.0, 44.5],
-          [36.0, 26.0],
-        ],
-        color: "#3b82f6",
+        type: "region",
+        coords: [[36.0, 26.0], [41.5, 26.0], [42.0, 40.0], [37.0, 44.5], [36.0, 26.0]],
+        center: [39.0, 35.0],
+        color: "#3b82f6"
       },
       Balkans: {
-        coords: [
-          [37.0, 19.0],
-          [46.0, 13.0],
-          [47.0, 22.0],
-          [40.0, 28.0],
-          [37.0, 21.0],
-        ],
-        color: "#8b5cf6",
+        type: "region",
+        coords: [[37.0, 19.0], [46.0, 13.0], [47.0, 22.0], [40.0, 28.0], [37.0, 21.0]],
+        center: [42.0, 21.0],
+        color: "#8b5cf6"
       },
       Caucasus: {
-        coords: [
-          [40.0, 38.0],
-          [44.0, 48.0],
-          [40.0, 48.0],
-          [40.0, 38.0],
-        ],
-        color: "#10b981",
+        type: "region",
+        coords: [[40.0, 38.0], [44.0, 48.0], [40.0, 48.0], [40.0, 38.0]],
+        center: [42.0, 43.0],
+        color: "#10b981"
       },
+      Crimea: {
+        type: "region",
+        coords: [[44.4, 32.5], [45.5, 32.5], [46.2, 34.0], [45.5, 36.5], [44.4, 35.5], [44.4, 32.5]],
+        center: [45.0, 34.0],
+        color: "#f59e0b"
+      },
+      Hungary: {
+        type: "region",
+        coords: [[45.8, 16.0], [48.5, 16.5], [48.5, 22.5], [46.0, 22.5], [45.8, 16.0]],
+        center: [47.1625, 19.5033],
+        color: "#ef4444"
+      },
+      Austria: {
+        type: "region",
+        coords: [[46.4, 9.5], [49.0, 9.5], [49.0, 17.2], [46.4, 17.2], [46.4, 9.5]],
+        center: [47.5162, 14.5501],
+        color: "#ec4899"
+      },
+      
+      // Rivers/Seas (lines or approximate points)
+      Danube: { coords: [45.0, 29.0], type: "point" },
+      Volga: { coords: [55.0, 49.0], type: "point" },
+      "Black Sea": { coords: [43.0, 35.0], type: "point" },
+      
+      // Other
+      German: { coords: [51.1657, 10.4515], type: "point" },
+      Germany: { coords: [51.1657, 10.4515], type: "point" },
+      Habsburg: { coords: [48.2082, 16.3738], type: "point" },
     };
 
     function initMap() {
@@ -419,30 +375,30 @@
         attribution: "© OpenStreetMap",
       }).addTo(state.map);
 
-      // Add region polygons
-      Object.keys(regionPolygons).forEach((name) => {
-        const region = regionPolygons[name];
-        const polygon = L.polygon(region.coords, {
-          color: region.color,
-          fillColor: region.color,
-          fillOpacity: 0,
-          weight: 2,
-          opacity: 0,
-        }).addTo(state.map);
-        polygon.bindPopup("<b>" + name + "</b>");
-        polygon.regionName = name;
-        state.regionPolygons.push(polygon);
+      // Pre-create region polygons (hidden initially)
+      Object.keys(geoDatabase).forEach((name) => {
+        const entry = geoDatabase[name];
+        if (entry.type === "region") {
+          const polygon = L.polygon(entry.coords, {
+            color: entry.color,
+            fillColor: entry.color,
+            fillOpacity: 0,
+            weight: 2,
+            opacity: 0,
+          }).addTo(state.map);
+          polygon.bindPopup("<b>" + name + "</b>");
+          polygon.regionName = name;
+          state.regionPolygons.push(polygon);
+        }
       });
     }
 
     function handleLocationClick(locationName, element) {
-      const coords = geoDatabase[locationName];
-      if (!coords) return;
+      const entry = geoDatabase[locationName];
+      if (!entry) return;
 
       // Update active badge
-      document
-        .querySelectorAll(".location-badge")
-        .forEach((el) => el.classList.remove("active"));
+      document.querySelectorAll(".location-badge").forEach((el) => el.classList.remove("active"));
       element.classList.add("active");
 
       // Update current index for timeline
@@ -456,39 +412,27 @@
 
       if (!state.autoMap || !state.map) return;
 
-      // Clear existing map highlights
+      // Clear existing highlights
       if (state.activeMapMarker) {
         state.map.removeLayer(state.activeMapMarker);
         state.activeMapMarker = null;
       }
-      if (state.activeRegionPolygon) {
-        state.activeRegionPolygon.setStyle({
-          fillOpacity: 0,
-          opacity: 0,
-          weight: 2,
-        });
-        state.activeRegionPolygon = null;
-      }
+      state.regionPolygons.forEach((p) =>
+        p.setStyle({ fillOpacity: 0, opacity: 0, weight: 2 })
+      );
+      state.activeRegionPolygon = null;
 
-      // Handle region polygons vs points
-      const regionDef = regionPolygons[locationName];
-      if (regionDef) {
-        const poly = state.regionPolygons.find(
-          (p) => p.regionName === locationName
-        );
+      // Handle region vs point
+      if (entry.type === "region") {
+        const poly = state.regionPolygons.find((p) => p.regionName === locationName);
         if (poly) {
-          state.regionPolygons.forEach((p) =>
-            p.setStyle({ fillOpacity: 0, opacity: 0, weight: 2 })
-          );
-          poly.setStyle({
-            fillOpacity: 0.35,
-            opacity: 0.9,
-            weight: 3,
-          });
+          poly.setStyle({ fillOpacity: 0.35, opacity: 0.9, weight: 3 });
           state.activeRegionPolygon = poly;
-          state.map.fitBounds(poly.getBounds());
+          state.map.fitBounds(poly.getBounds(), { padding: [30, 30] });
+          poly.openPopup();
         }
       } else {
+        const coords = entry.coords;
         state.map.setView(coords, 8);
         const marker = L.circleMarker(coords, {
           radius: 15,
@@ -500,7 +444,6 @@
           .addTo(state.map)
           .bindPopup("<b>" + locationName + "</b>")
           .openPopup();
-
         state.activeMapMarker = marker;
       }
     }
@@ -510,29 +453,24 @@
       container.innerHTML = "";
       state.allLocations = [];
 
-      console.log("Rendering PDF pages…");
       for (let pageNum = 1; pageNum <= state.pdfDoc.numPages; pageNum++) {
         const page = await state.pdfDoc.getPage(pageNum);
         const scale = 1.5;
         const viewport = page.getViewport({ scale });
 
-        // Page wrapper
         const pageWrapper = document.createElement("div");
         pageWrapper.className = "pdf-page-wrapper";
         pageWrapper.dataset.page = pageNum;
 
-        // Page number
         const pageNumber = document.createElement("div");
         pageNumber.className = "page-number";
         pageNumber.textContent = "Page " + pageNum;
         pageWrapper.appendChild(pageNumber);
 
-        // Canvas container
         const canvasContainer = document.createElement("div");
         canvasContainer.style.position = "relative";
         canvasContainer.style.width = "100%";
 
-        // Canvas
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
         canvas.width = viewport.width;
@@ -542,12 +480,10 @@
         await page.render({ canvasContext: ctx, viewport }).promise;
         canvasContainer.appendChild(canvas);
 
-        // Text overlay
         const textOverlay = document.createElement("div");
         textOverlay.className = "text-overlay";
 
-        // Ensure overlay matches the rendered (scaled) canvas size
-        const displayScale = canvas.clientWidth / viewport.width;
+        const displayScale = canvas.clientWidth / viewport.width || 1;
         const displayHeight = viewport.height * displayScale;
         canvasContainer.style.height = displayHeight + "px";
         textOverlay.style.width = canvas.clientWidth + "px";
@@ -562,10 +498,7 @@
           if (!rawText) return;
 
           const rawTransform = item.transform || [];
-          const transform = pdfjsLib.Util.transform(
-            viewport.transform,
-            rawTransform
-          );
+          const transform = pdfjsLib.Util.transform(viewport.transform, rawTransform);
           const fontHeight = Math.hypot(transform[1] || 0, transform[3] || 0);
           const textWidthPx = (item.width || 0) * viewport.scale;
           const leftBase = transform[4] || 0;
@@ -590,6 +523,13 @@
 
               const highlight = document.createElement("div");
               highlight.className = "location-badge";
+              
+              // Add region-badge class for regions
+              const entry = geoDatabase[location];
+              if (entry && entry.type === "region") {
+                highlight.classList.add("region-badge");
+              }
+              
               highlight.dataset.location = location;
               highlight.dataset.left = leftOffsetBase;
               highlight.dataset.top = topOffsetBase;
@@ -600,13 +540,12 @@
               highlight.style.top = topOffsetBase * displayScale + "px";
               highlight.style.width = highlightWidthBase * displayScale + "px";
               highlight.style.height = highlightHeightBase * displayScale + "px";
-              highlight.title = "Click to view location on map";
+              highlight.title = location + " - Click to view on map";
 
               highlight.onclick = () => handleLocationClick(location, highlight);
 
               textOverlay.appendChild(highlight);
 
-              // Track for timeline
               state.allLocations.push({
                 name: location,
                 element: highlight,
@@ -621,7 +560,6 @@
         container.appendChild(pageWrapper);
       }
 
-      console.log("Total locations found:", state.allLocations.length);
       updateTimeline();
       rescaleOverlays();
     }
@@ -629,20 +567,15 @@
     function updateTimeline() {
       const total = state.allLocations.length;
       const counter = document.getElementById("marker-counter");
-      counter.textContent =
-        (total === 0 ? 0 : state.currentLocationIndex + 1) + "/" + total;
+      counter.textContent = (total === 0 ? 0 : state.currentLocationIndex + 1) + "/" + total;
 
       if (total === 0) {
         document.getElementById("timeline-progress").style.width = "0";
         return;
       }
 
-      const progress =
-        (state.currentLocationIndex /
-          Math.max(total - 1, 1)) *
-        100;
-      document.getElementById("timeline-progress").style.width =
-        progress + "%";
+      const progress = (state.currentLocationIndex / Math.max(total - 1, 1)) * 100;
+      document.getElementById("timeline-progress").style.width = progress + "%";
     }
 
     function rescaleOverlays() {
@@ -681,23 +614,15 @@
       state.currentLocationIndex = index;
       const location = state.allLocations[index];
 
-      location.element.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-
+      location.element.scrollIntoView({ behavior: "smooth", block: "center" });
       handleLocationClick(location.name, location.element);
     }
 
     function updateReadingProgress() {
       const viewer = document.getElementById("pdf-viewer");
       if (!viewer) return;
-      const scrollPercent =
-        (viewer.scrollTop /
-          (viewer.scrollHeight - viewer.clientHeight || 1)) *
-        100;
-      document.getElementById("readingProgress").style.width =
-        Math.min(scrollPercent, 100) + "%";
+      const scrollPercent = (viewer.scrollTop / (viewer.scrollHeight - viewer.clientHeight || 1)) * 100;
+      document.getElementById("readingProgress").style.width = Math.min(scrollPercent, 100) + "%";
     }
 
     async function loadPDF(fileOrBlob) {
@@ -706,25 +631,12 @@
           throw new Error("PDF.js library not loaded");
         }
 
-        let arrayBuffer;
-        if (fileOrBlob instanceof Blob) {
-          arrayBuffer = await fileOrBlob.arrayBuffer();
-        } else {
-          // File from input
-          arrayBuffer = await fileOrBlob.arrayBuffer();
-        }
-
-        const loadingTask = window.pdfjsLib.getDocument({
-          data: new Uint8Array(arrayBuffer),
-        });
+        const arrayBuffer = await fileOrBlob.arrayBuffer();
+        const loadingTask = window.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
         state.pdfDoc = await loadingTask.promise;
 
-        document
-          .getElementById("pdf-placeholder")
-          .classList.add("hidden");
-        document
-          .getElementById("pdf-container")
-          .classList.remove("hidden");
+        document.getElementById("pdf-placeholder").classList.add("hidden");
+        document.getElementById("pdf-container").classList.remove("hidden");
 
         await renderAllPages();
       } catch (error) {
@@ -741,66 +653,31 @@
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
 
-      // Page 1
       doc.setFontSize(16);
       doc.text("The Battle of Mohacs 1526", 20, 20);
       doc.setFontSize(12);
-      doc.text(
-        "Near Hungary, Ottoman forces defeated Habsburg.",
-        20,
-        40
-      );
-      doc.text(
-        "The march continued toward Vienna and the Danube.",
-        20,
-        50
-      );
-      doc.text(
-        "German resistance formed as Constantinople directed.",
-        20,
-        60
-      );
+      doc.text("Near Hungary, Ottoman forces defeated Habsburg.", 20, 40);
+      doc.text("The march continued toward Vienna and the Danube.", 20, 50);
+      doc.text("German resistance formed as Constantinople directed.", 20, 60);
+      doc.text("The Anatolia region supplied troops.", 20, 70);
 
-      // Page 2
       doc.addPage();
       doc.setFontSize(16);
       doc.text("Ottoman Expansion", 20, 20);
       doc.setFontSize(12);
-      doc.text(
-        "Key cities: Constantinople, Moscow, Cairo, Baghdad.",
-        20,
-        40
-      );
+      doc.text("Key cities: Constantinople, Moscow, Cairo, Baghdad.", 20, 40);
       doc.text("Regions: Anatolia, Balkans, and Caucasus.", 20, 50);
-      doc.text(
-        "Strategic areas: Black Sea and Crimea.",
-        20,
-        60
-      );
+      doc.text("Strategic areas: Black Sea and Crimea.", 20, 60);
 
-      // Page 3
       doc.addPage();
       doc.setFontSize(16);
       doc.text("Later Campaigns", 20, 20);
       doc.setFontSize(12);
-      doc.text(
-        "Extended to Damascus and Baghdad in the east.",
-        20,
-        40
-      );
-      doc.text(
-        "Cities: Belgrade, Bucharest, Odessa, Sevastopol.",
-        20,
-        50
-      );
-      doc.text(
-        "Struggle for Austria and Vienna continued.",
-        20,
-        60
-      );
+      doc.text("Extended to Damascus and Baghdad in the east.", 20, 40);
+      doc.text("Cities: Belgrade, Bucharest, Odessa, Sevastopol.", 20, 50);
+      doc.text("Struggle for Austria and Vienna continued.", 20, 60);
 
-      const blob = doc.output("blob");
-      loadPDF(blob);
+      loadPDF(doc.output("blob"));
     }
 
     function initResizer() {
@@ -808,10 +685,7 @@
       const pdfViewer = document.getElementById("pdf-viewer");
       const mapContainer = document.getElementById("map-container");
 
-      let startY = 0;
-      let startX = 0;
-      let startHeightPdf = 0;
-      let startWidthPdf = 0;
+      let startY = 0, startX = 0, startHeightPdf = 0, startWidthPdf = 0;
 
       function startResize(e) {
         state.isResizing = true;
@@ -833,32 +707,18 @@
         const isTouch = e.type === "touchmove";
 
         if (window.innerWidth <= 768) {
-          // Vertical resize (stacked)
           const currentY = isTouch ? e.touches[0].clientY : e.clientY;
           const newHeight = startHeightPdf + (currentY - startY);
-          const minHeight = window.innerHeight * 0.2;
-          const maxHeight = window.innerHeight * 0.8;
-
-          const clamped = Math.max(minHeight, Math.min(maxHeight, newHeight));
+          const clamped = Math.max(window.innerHeight * 0.2, Math.min(window.innerHeight * 0.8, newHeight));
           pdfViewer.style.height = clamped + "px";
-          mapContainer.style.height =
-            window.innerHeight - clamped - 10 + "px";
+          mapContainer.style.height = window.innerHeight - clamped - 10 + "px";
         } else {
-          // Horizontal resize (side-by-side)
           const currentX = isTouch ? e.touches[0].clientX : e.clientX;
           const newWidth = startWidthPdf + (currentX - startX);
-          const minWidth = window.innerWidth * 0.2;
-          const maxWidth = window.innerWidth * 0.8;
-
-          const clamped = Math.max(minWidth, Math.min(maxWidth, newWidth));
+          const clamped = Math.max(window.innerWidth * 0.2, Math.min(window.innerWidth * 0.8, newWidth));
           pdfViewer.style.width = clamped + "px";
-          mapContainer.style.width =
-            window.innerWidth - clamped - 10 + "px";
-
-          if (state.map) {
-            state.map.invalidateSize();
-          }
-
+          mapContainer.style.width = window.innerWidth - clamped - 10 + "px";
+          if (state.map) state.map.invalidateSize();
           rescaleOverlays();
         }
       }
@@ -872,80 +732,42 @@
       }
 
       handle.addEventListener("mousedown", startResize);
-      handle.addEventListener("touchstart", startResize, {
-        passive: false,
-      });
+      handle.addEventListener("touchstart", startResize, { passive: false });
     }
 
     // Event listeners
-    document
-      .getElementById("upload-btn")
-      .addEventListener("click", () =>
-        document.getElementById("pdf-input").click()
-      );
-
-    document
-      .getElementById("pdf-input")
-      .addEventListener("change", (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (file) loadPDF(file);
-      });
-
-    document
-      .getElementById("generate-test-pdf")
-      .addEventListener("click", generateTestPDF);
-
-    document
-      .getElementById("auto-map-toggle")
-      .addEventListener("click", (e) => {
-        state.autoMap = !state.autoMap;
-        e.target.textContent = "Auto " + (state.autoMap ? "ON" : "OFF");
-        e.target.classList.toggle("bg-teal-500", state.autoMap);
-        e.target.classList.toggle("bg-gray-400", !state.autoMap);
-      });
-
-    document
-      .getElementById("prev-marker")
-      .addEventListener("click", () => {
-        if (state.currentLocationIndex > 0) {
-          navigateToLocation(state.currentLocationIndex - 1);
-        }
-      });
-
-    document
-      .getElementById("next-marker")
-      .addEventListener("click", () => {
-        if (
-          state.currentLocationIndex <
-          state.allLocations.length - 1
-        ) {
-          navigateToLocation(state.currentLocationIndex + 1);
-        }
-      });
-
-    document
-      .getElementById("timeline-bar")
-      .addEventListener("click", (e) => {
-        if (!state.allLocations.length) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const percent = (e.clientX - rect.left) / rect.width;
-        const targetIndex = Math.floor(percent * state.allLocations.length);
-        navigateToLocation(
-          Math.min(targetIndex, state.allLocations.length - 1)
-        );
-      });
-
-    document
-      .getElementById("pdf-viewer")
-      .addEventListener("scroll", updateReadingProgress);
-
+    document.getElementById("upload-btn").addEventListener("click", () => document.getElementById("pdf-input").click());
+    document.getElementById("pdf-input").addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) loadPDF(file);
+    });
+    document.getElementById("generate-test-pdf").addEventListener("click", generateTestPDF);
+    document.getElementById("auto-map-toggle").addEventListener("click", (e) => {
+      state.autoMap = !state.autoMap;
+      e.target.textContent = "Auto " + (state.autoMap ? "ON" : "OFF");
+      e.target.classList.toggle("bg-teal-500", state.autoMap);
+      e.target.classList.toggle("bg-gray-400", !state.autoMap);
+    });
+    document.getElementById("prev-marker").addEventListener("click", () => {
+      if (state.currentLocationIndex > 0) navigateToLocation(state.currentLocationIndex - 1);
+    });
+    document.getElementById("next-marker").addEventListener("click", () => {
+      if (state.currentLocationIndex < state.allLocations.length - 1) navigateToLocation(state.currentLocationIndex + 1);
+    });
+    document.getElementById("timeline-bar").addEventListener("click", (e) => {
+      if (!state.allLocations.length) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      const targetIndex = Math.floor(percent * state.allLocations.length);
+      navigateToLocation(Math.min(targetIndex, state.allLocations.length - 1));
+    });
+    document.getElementById("pdf-viewer").addEventListener("scroll", updateReadingProgress);
     window.addEventListener("resize", rescaleOverlays);
 
     // Init
     initMap();
     initResizer();
     feather.replace();
-    console.log("ScrollThroughTime initialized");
   </script>
 </body>
 </html>
