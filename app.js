@@ -40,38 +40,55 @@ const state = {
     overlayLayers: {} // Track active overlay layers
 };
 
-// Historian Overlay Layers - tile sources
+// Historian Overlay Layers - tile sources (improved with better data visibility)
 const overlayLayerDefs = {
     rivers: {
         name: "Rivers & Water",
         layer: () => L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
             maxZoom: 17,
-            opacity: 0.5,
-            attribution: '© OpenTopoMap'
+            opacity: 0.4,
+            attribution: '© OpenTopoMap',
+            className: 'overlay-rivers'
         })
     },
     population: {
         name: "Population Density",
-        layer: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+        // Using Stamen Toner for better population/city visibility
+        layer: () => L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_toner_labels/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            opacity: 0.6,
-            attribution: '© CartoDB'
+            opacity: 0.75,
+            attribution: '© Stadia Maps © Stamen Design',
+            className: 'overlay-population'
         })
     },
     borders: {
-        name: "Borders & Lines",
+        name: "Borders & Labels",
+        // Better labels overlay from CartoDB
         layer: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            opacity: 0.7,
-            attribution: '© CartoDB'
+            opacity: 0.8,
+            attribution: '© CartoDB',
+            className: 'overlay-borders'
         })
     },
     terrain: {
         name: "Terrain & Elevation",
-        layer: () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 16,
-            opacity: 0.6,
-            attribution: '© Esri'
+        // Using USGS Shaded Relief for better terrain visibility
+        layer: () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 13,
+            opacity: 0.5,
+            attribution: '© Esri',
+            className: 'overlay-terrain'
+        })
+    },
+    geopolitical: {
+        name: "Geopolitical Boundaries",
+        // Using OpenHistoricalMap for historical geopolitical boundaries
+        layer: () => L.tileLayer('https://tile.openhistoricalmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            opacity: 0.65,
+            attribution: '© OpenHistoricalMap contributors',
+            className: 'overlay-geopolitical'
         })
     }
 };
@@ -218,19 +235,87 @@ function renderRegions(targetMap, storageArray) {
                 const polygon = L.polygon(entry.coords, {
                     color: entry.color || "#3b82f6",
                     fillColor: entry.color || "#3b82f6",
-                    fillOpacity: 0,
+                    fillOpacity: 0.08, // Subtle visibility by default (was 0)
                     weight: 2,
-                    opacity: 0,
+                    opacity: 0.35, // Subtle border visibility (was 0)
                     dashArray: "5, 5"
                 }).addTo(targetMap);
                 polygon.bindPopup("<b>" + name + "</b>");
                 polygon.regionName = name;
                 storageArray.push(polygon);
+
+                // Add hover effect for better UX
+                polygon.on('mouseover', function() {
+                    if (state.activeRegionPolygon !== this) {
+                        this.setStyle({
+                            fillOpacity: 0.15,
+                            opacity: 0.6,
+                            weight: 3
+                        });
+                    }
+                });
+
+                polygon.on('mouseout', function() {
+                    if (state.activeRegionPolygon !== this) {
+                        this.setStyle({
+                            fillOpacity: 0.08,
+                            opacity: 0.35,
+                            weight: 2
+                        });
+                    }
+                });
+
+                // Add click handler for regions on the map
+                polygon.on('click', function() {
+                    handleRegionClick(name, this);
+                });
             } catch (e) {
                 // ignore invalid polygons
             }
         }
     });
+}
+
+// Handle clicking on a region polygon on the map
+function handleRegionClick(regionName, polygon) {
+    // Reset all regions to default style
+    state.regionPolygons.forEach(p => {
+        const entry = geoDatabase[p.regionName];
+        p.setStyle({
+            fillOpacity: 0.08,
+            opacity: 0.35,
+            weight: 2,
+            color: entry?.color || "#3b82f6",
+            dashArray: "5, 5"
+        });
+    });
+
+    // Highlight selected region
+    polygon.setStyle({
+        fillOpacity: 0.25,
+        opacity: 1,
+        weight: 3,
+        color: "#dc2626",
+        dashArray: null
+    });
+
+    state.activeRegionPolygon = polygon;
+    state.map.fitBounds(polygon.getBounds(), { padding: [30, 30] });
+
+    // Also sync with inline map if in split view
+    if (state.viewMode !== 'panel' && state.inlineMap) {
+        const inlinePolygon = state.inlineRegionPolygons.find(p => p.regionName === regionName);
+        if (inlinePolygon) {
+            inlinePolygon.setStyle({
+                fillOpacity: 0.25,
+                opacity: 1,
+                weight: 3,
+                color: "#dc2626",
+                dashArray: null
+            });
+            state.inlineMap.fitBounds(inlinePolygon.getBounds(), { padding: [30, 30] });
+        }
+    }
 }
 
 // Initialize the main map with clustering and base layer tracking
@@ -533,156 +618,235 @@ async function renderAllPages() {
     state.markerCluster.clearLayers();
     state.allMarkers = [];
     showLoading("Rendering pages...");
+
+    // Lazy loading: Only render first 5 pages initially, rest on demand
+    const initialPages = Math.min(5, state.pdfDoc.numPages);
+
     for (let pageNum = 1; pageNum <= state.pdfDoc.numPages; pageNum++) {
-        updateLoading("Page " + pageNum + "/" + state.pdfDoc.numPages);
-        try {
-            const page = await state.pdfDoc.getPage(pageNum);
-            const scale = 1.5;
-            const viewport = page.getViewport({ scale });
-            const pageWrapper = document.createElement("div");
-            pageWrapper.className = "pdf-page-wrapper";
-            pageWrapper.dataset.page = pageNum;
-            const pageNumber = document.createElement("div");
-            pageNumber.className = "page-number";
-            pageNumber.textContent = "Page " + pageNum;
-            pageWrapper.appendChild(pageNumber);
-            const canvasContainer = document.createElement("div");
-            canvasContainer.style.cssText = "position:relative;width:100%;";
-            const canvas = document.createElement("canvas");
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            canvas.className = "pdf-canvas";
-            canvasContainer.appendChild(canvas);
-            pageWrapper.appendChild(canvasContainer);
-            container.appendChild(pageWrapper);
-            await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-            const textOverlay = document.createElement("div");
-            textOverlay.className = "text-overlay";
-            textOverlay.dataset.viewportWidth = viewport.width;
-            textOverlay.dataset.viewportHeight = viewport.height;
-            textOverlay.style.width = canvas.width + "px";
-            textOverlay.style.height = canvas.height + "px";
-            textOverlay.style.position = "absolute";
-            textOverlay.style.top = "0";
-            textOverlay.style.left = "0";
-            textOverlay.style.pointerEvents = "none";
-            const textLayer = document.createElement("div");
-            textLayer.className = "pdf-text-layer";
-            textLayer.style.position = "absolute";
-            textLayer.style.inset = "0";
-            textLayer.style.pointerEvents = "none";
-            textLayer.style.fontFamily = "serif";
-            textOverlay.appendChild(textLayer);
-            canvasContainer.appendChild(textOverlay);
-            const textContent = await page.getTextContent();
-            let fullText = "";
-            const textItems = [];
-            // Phase 1: render spans
-            textContent.items.forEach(item => {
-                const raw = item.str || "";
-                if (!raw) return;
-                const startIdx = fullText.length;
-                fullText += raw;
-                const transform = pdfjsLib.Util.transform(viewport.transform, item.transform || []);
-                const fontHeight = Math.hypot(transform[1] || 0, transform[3] || 0);
-                const textWidthPx = (item.width || 0) * viewport.scale;
-                const span = document.createElement("span");
-                span.textContent = raw;
-                span.style.position = "absolute";
-                span.style.left = (transform[4] || 0) + "px";
-                span.style.top = ((transform[5] || 0) - fontHeight) + "px";
-                span.style.fontSize = Math.max(1, fontHeight) + "px";
-                span.style.transformOrigin = "0% 0%";
-                span.style.whiteSpace = "pre";
-                span.style.color = "transparent";
-                textLayer.appendChild(span);
-                textItems.push({
-                    text: raw,
-                    startIndex: startIdx,
-                    endIndex: startIdx + raw.length,
-                    leftBase: transform[4] || 0,
-                    topBase: (transform[5] || 0) - fontHeight,
-                    fontHeight,
-                    textWidthPx,
-                    element: span
-                });
-            });
-            // Phase 2: scale spans horizontally
-            textItems.forEach(item => {
-                const w = item.element.offsetWidth;
-                if (w > 0) {
-                    const s = item.textWidthPx / w;
-                    item.element.style.transform = `scaleX(${s})`;
-                }
-            });
-            // Phase 3: highlight matches using Range API
-            extractEntitiesForPage(fullText).forEach(entity => {
-                for (const item of textItems) {
-                    if (entity.index >= item.startIndex && entity.index < item.endIndex) {
-                        const localStart = entity.index - item.startIndex;
-                        const localLen = Math.min(entity.length, item.text.length - localStart);
-                        if (localLen <= 0) continue;
-                        try {
-                            const range = document.createRange();
-                            if (item.element.firstChild) {
-                                range.setStart(item.element.firstChild, localStart);
-                                range.setEnd(item.element.firstChild, localStart + localLen);
-                                const rects = range.getClientRects();
-                                for (const rect of rects) {
-                                    const currentOverlayRect = textOverlay.getBoundingClientRect();
-                                    // Compute values relative to PDF coordinate space so scaling is robust
-                                    const scaleNow = currentOverlayRect.width / viewport.width;
-                                    const leftV = (rect.left - currentOverlayRect.left) / scaleNow;
-                                    const topV = (rect.top - currentOverlayRect.top) / scaleNow;
-                                    const wV = rect.width / scaleNow;
-                                    const hV = rect.height / scaleNow;
-                                    const hl = document.createElement("div");
-                                    hl.className = "location-badge" + (entity.type === "region" ? " region-badge" : entity.type === "event" ? " event-badge" : "");
-                                    hl.dataset.location = entity.name;
-                                    hl.dataset.entityType = entity.type;
-                                    if (entity.locationName) hl.dataset.eventLocation = entity.locationName;
-                                    // Store viewport-space values for rescaling
-                                    hl.dataset.leftV = leftV;
-                                    hl.dataset.topV = topV;
-                                    hl.dataset.widthV = wV;
-                                    hl.dataset.heightV = hV;
-                                    // Fallback pixel values
-                                    hl.dataset.left = (rect.left - currentOverlayRect.left);
-                                    hl.dataset.top = (rect.top - currentOverlayRect.top);
-                                    hl.dataset.width = rect.width;
-                                    hl.dataset.height = rect.height;
-                                    hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
-                                    textOverlay.appendChild(hl);
-                                    state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName });
-                                }
-                            }
-                        } catch (err) {
-                            console.warn("Range error", err);
-                        }
-                        let coords = entity.type === "event" && entity.locationName ? (eventLocations[entity.locationName] || getContextualCoords(entity.locationName)) : getContextualCoords(entity.name);
-                        if (coords) {
-                            addToContext(entity.name, coords);
-                            const marker = L.marker(coords).bindPopup("<b>" + entity.name + "</b><br>Page " + pageNum);
-                            state.allMarkers.push(marker);
-                            state.markerCluster.addLayer(marker);
-                            if (state.inlineLayerGroup) {
-                                state.inlineLayerGroup.addLayer(L.marker(coords).bindPopup("<b>" + entity.name + "</b><br>Page " + pageNum));
-                            }
-                        }
-                        break;
-                    }
-                }
-            });
-        } catch (e) {
-            console.error("Page " + pageNum + " error:", e);
+        if (pageNum <= initialPages) {
+            updateLoading("Page " + pageNum + "/" + state.pdfDoc.numPages);
+            await renderPage(pageNum);
+        } else {
+            // Create placeholder for lazy loading
+            createPagePlaceholder(pageNum);
         }
     }
+
+    // Set up intersection observer for lazy loading
+    setupLazyLoading();
+
     hideLoading();
     updateTimeline();
     rescaleOverlays();
     document.getElementById("entityLegend").classList.remove("hidden");
     document.getElementById("timelineControls").classList.remove("hidden");
     localforage.setItem("readingPosition", { scroll: 0, index: 0, ts: Date.now() });
+}
+
+// Create placeholder for a page to be lazy-loaded
+function createPagePlaceholder(pageNum) {
+    const container = document.getElementById("pdf-container");
+    const pageWrapper = document.createElement("div");
+    pageWrapper.className = "pdf-page-wrapper pdf-page-placeholder";
+    pageWrapper.dataset.page = pageNum;
+    pageWrapper.style.minHeight = "800px";
+    pageWrapper.style.display = "flex";
+    pageWrapper.style.alignItems = "center";
+    pageWrapper.style.justifyContent = "center";
+
+    const pageNumber = document.createElement("div");
+    pageNumber.className = "page-number";
+    pageNumber.textContent = "Page " + pageNum + " - Loading...";
+    pageWrapper.appendChild(pageNumber);
+
+    container.appendChild(pageWrapper);
+}
+
+// Set up intersection observer for lazy loading
+function setupLazyLoading() {
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && entry.target.classList.contains('pdf-page-placeholder')) {
+                const pageNum = parseInt(entry.target.dataset.page);
+                observer.unobserve(entry.target);
+                renderPage(pageNum).then(() => {
+                    rescaleOverlays();
+                    updateTimeline();
+                });
+            }
+        });
+    }, { rootMargin: '400px' });
+
+    document.querySelectorAll('.pdf-page-placeholder').forEach(el => {
+        observer.observe(el);
+    });
+}
+
+// Render a single page
+async function renderPage(pageNum) {
+    try {
+        const page = await state.pdfDoc.getPage(pageNum);
+        const scale = 1.2; // Reduced from 1.5 for better performance
+        const viewport = page.getViewport({ scale });
+
+        // Find or create page wrapper
+        let pageWrapper = document.querySelector(`[data-page="${pageNum}"]`);
+        const isPlaceholder = pageWrapper?.classList.contains('pdf-page-placeholder');
+
+        if (!pageWrapper || isPlaceholder) {
+            const newWrapper = document.createElement("div");
+            newWrapper.className = "pdf-page-wrapper";
+            newWrapper.dataset.page = pageNum;
+            if (pageWrapper) {
+                pageWrapper.replaceWith(newWrapper);
+            } else {
+                document.getElementById("pdf-container").appendChild(newWrapper);
+            }
+            pageWrapper = newWrapper;
+        }
+
+        pageWrapper.innerHTML = "";
+        pageWrapper.style.minHeight = "";
+
+        const pageNumber = document.createElement("div");
+        pageNumber.className = "page-number";
+        pageNumber.textContent = "Page " + pageNum;
+        pageWrapper.appendChild(pageNumber);
+
+        const canvasContainer = document.createElement("div");
+        canvasContainer.style.cssText = "position:relative;width:100%;";
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.className = "pdf-canvas";
+        canvasContainer.appendChild(canvas);
+        pageWrapper.appendChild(canvasContainer);
+
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+
+        const textOverlay = document.createElement("div");
+        textOverlay.className = "text-overlay";
+        textOverlay.dataset.viewportWidth = viewport.width;
+        textOverlay.dataset.viewportHeight = viewport.height;
+        textOverlay.style.width = canvas.width + "px";
+        textOverlay.style.height = canvas.height + "px";
+        textOverlay.style.position = "absolute";
+        textOverlay.style.top = "0";
+        textOverlay.style.left = "0";
+        textOverlay.style.pointerEvents = "none";
+
+        const textLayer = document.createElement("div");
+        textLayer.className = "pdf-text-layer";
+        textLayer.style.position = "absolute";
+        textLayer.style.inset = "0";
+        textLayer.style.pointerEvents = "none";
+        textLayer.style.fontFamily = "serif";
+        textOverlay.appendChild(textLayer);
+        canvasContainer.appendChild(textOverlay);
+
+        const textContent = await page.getTextContent();
+        let fullText = "";
+        const textItems = [];
+
+        // Phase 1: render spans
+        textContent.items.forEach(item => {
+            const raw = item.str || "";
+            if (!raw) return;
+            const startIdx = fullText.length;
+            fullText += raw;
+            const transform = pdfjsLib.Util.transform(viewport.transform, item.transform || []);
+            const fontHeight = Math.hypot(transform[1] || 0, transform[3] || 0);
+            const textWidthPx = (item.width || 0) * viewport.scale;
+            const span = document.createElement("span");
+            span.textContent = raw;
+            span.style.position = "absolute";
+            span.style.left = (transform[4] || 0) + "px";
+            span.style.top = ((transform[5] || 0) - fontHeight) + "px";
+            span.style.fontSize = Math.max(1, fontHeight) + "px";
+            span.style.transformOrigin = "0% 0%";
+            span.style.whiteSpace = "pre";
+            span.style.color = "transparent";
+            textLayer.appendChild(span);
+            textItems.push({
+                text: raw,
+                startIndex: startIdx,
+                endIndex: startIdx + raw.length,
+                leftBase: transform[4] || 0,
+                topBase: (transform[5] || 0) - fontHeight,
+                fontHeight,
+                textWidthPx,
+                element: span
+            });
+        });
+
+        // Phase 2: scale spans horizontally
+        textItems.forEach(item => {
+            const w = item.element.offsetWidth;
+            if (w > 0) {
+                const s = item.textWidthPx / w;
+                item.element.style.transform = `scaleX(${s})`;
+            }
+        });
+
+        // Phase 3: highlight matches using Range API
+        extractEntitiesForPage(fullText).forEach(entity => {
+            for (const item of textItems) {
+                if (entity.index >= item.startIndex && entity.index < item.endIndex) {
+                    const localStart = entity.index - item.startIndex;
+                    const localLen = Math.min(entity.length, item.text.length - localStart);
+                    if (localLen <= 0) continue;
+                    try {
+                        const range = document.createRange();
+                        if (item.element.firstChild) {
+                            range.setStart(item.element.firstChild, localStart);
+                            range.setEnd(item.element.firstChild, localStart + localLen);
+                            const rects = range.getClientRects();
+                            for (const rect of rects) {
+                                const currentOverlayRect = textOverlay.getBoundingClientRect();
+                                const scaleNow = currentOverlayRect.width / viewport.width;
+                                const leftV = (rect.left - currentOverlayRect.left) / scaleNow;
+                                const topV = (rect.top - currentOverlayRect.top) / scaleNow;
+                                const wV = rect.width / scaleNow;
+                                const hV = rect.height / scaleNow;
+                                const hl = document.createElement("div");
+                                hl.className = "location-badge" + (entity.type === "region" ? " region-badge" : entity.type === "event" ? " event-badge" : "");
+                                hl.dataset.location = entity.name;
+                                hl.dataset.entityType = entity.type;
+                                if (entity.locationName) hl.dataset.eventLocation = entity.locationName;
+                                hl.dataset.leftV = leftV;
+                                hl.dataset.topV = topV;
+                                hl.dataset.widthV = wV;
+                                hl.dataset.heightV = hV;
+                                hl.dataset.left = (rect.left - currentOverlayRect.left);
+                                hl.dataset.top = (rect.top - currentOverlayRect.top);
+                                hl.dataset.width = rect.width;
+                                hl.dataset.height = rect.height;
+                                hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
+                                textOverlay.appendChild(hl);
+                                state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName });
+                            }
+                        }
+                    } catch (err) {
+                        console.warn("Range error", err);
+                    }
+
+                    let coords = entity.type === "event" && entity.locationName ? (eventLocations[entity.locationName] || getContextualCoords(entity.locationName)) : getContextualCoords(entity.name);
+                    if (coords) {
+                        addToContext(entity.name, coords);
+                        const marker = L.marker(coords).bindPopup("<b>" + entity.name + "</b><br>Page " + pageNum);
+                        state.allMarkers.push(marker);
+                        state.markerCluster.addLayer(marker);
+                        if (state.inlineLayerGroup) {
+                            state.inlineLayerGroup.addLayer(L.marker(coords).bindPopup("<b>" + entity.name + "</b><br>Page " + pageNum));
+                        }
+                    }
+                    break;
+                }
+            }
+        });
+    } catch (e) {
+        console.error("Page " + pageNum + " error:", e);
+    }
 }
 
 // Rescale overlays on page resize or view changes
@@ -998,11 +1162,13 @@ document.getElementById("layer-rivers")?.addEventListener("click", () => toggleO
 document.getElementById("layer-population")?.addEventListener("click", () => toggleOverlayLayer('population'));
 document.getElementById("layer-borders")?.addEventListener("click", () => toggleOverlayLayer('borders'));
 document.getElementById("layer-terrain")?.addEventListener("click", () => toggleOverlayLayer('terrain'));
+document.getElementById("layer-geopolitical")?.addEventListener("click", () => toggleOverlayLayer('geopolitical'));
 // Inline map overlay toggles
 document.getElementById("inline-layer-rivers")?.addEventListener("click", () => toggleOverlayLayer('rivers'));
 document.getElementById("inline-layer-population")?.addEventListener("click", () => toggleOverlayLayer('population'));
 document.getElementById("inline-layer-borders")?.addEventListener("click", () => toggleOverlayLayer('borders'));
 document.getElementById("inline-layer-terrain")?.addEventListener("click", () => toggleOverlayLayer('terrain'));
+document.getElementById("inline-layer-geopolitical")?.addEventListener("click", () => toggleOverlayLayer('geopolitical'));
 // Inline map style buttons
 document.querySelectorAll('#inline-map-controls .map-style-btn').forEach(btn => {
     btn.addEventListener('click', () => changeMapStyle(btn.dataset.style));
