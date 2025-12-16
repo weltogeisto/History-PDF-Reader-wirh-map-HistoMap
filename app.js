@@ -782,13 +782,20 @@ function setupLazyLoading() {
             if (entry.isIntersecting && entry.target.classList.contains('pdf-page-placeholder')) {
                 const pageNum = parseInt(entry.target.dataset.page);
                 observer.unobserve(entry.target);
-                renderPage(pageNum).then(() => {
-                    rescaleOverlays();
-                    updateTimeline();
-                });
+                renderPage(pageNum)
+                    .then(() => {
+                        rescaleOverlays();
+                        updateTimeline();
+                    })
+                    .catch(err => {
+                        console.error(`Failed to render page ${pageNum}:`, err);
+                        // Show error in placeholder
+                        entry.target.innerHTML = `<div class="page-number" style="color: #ef4444;">Page ${pageNum} failed to load</div>`;
+                        entry.target.classList.remove('pdf-page-placeholder');
+                    });
             }
         });
-    }, { rootMargin: '400px' });
+    }, { rootMargin: '600px' }); // Increased for smoother scrolling
 
     document.querySelectorAll('.pdf-page-placeholder').forEach(el => {
         observer.observe(el);
