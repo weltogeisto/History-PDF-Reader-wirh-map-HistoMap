@@ -40,50 +40,151 @@ const state = {
     overlayLayers: {} // Track active overlay layers
 };
 
-// Historian Overlay Layers - meaningful overlays that show specific features
+// Major historical rivers GeoJSON - simplified coordinates for key rivers
+const majorRiversGeoJSON = {
+    type: "FeatureCollection",
+    features: [
+        { type: "Feature", properties: { name: "Danube", importance: "major" },
+          geometry: { type: "LineString", coordinates: [
+            [8.15, 47.85], [9.5, 48.5], [11.5, 48.7], [13.0, 48.3], [15.0, 48.2],
+            [16.95, 48.15], [18.0, 47.8], [18.85, 47.5], [19.05, 46.3], [20.5, 44.8],
+            [21.5, 44.6], [22.5, 44.2], [24.0, 43.8], [25.5, 43.8], [26.5, 44.0],
+            [27.5, 44.2], [28.5, 44.4], [29.0, 45.0], [29.7, 45.3]
+          ]}},
+        { type: "Feature", properties: { name: "Dnieper", importance: "major" },
+          geometry: { type: "LineString", coordinates: [
+            [33.0, 55.0], [32.0, 54.5], [31.0, 53.5], [30.5, 52.5], [31.5, 51.5],
+            [32.0, 50.5], [33.5, 49.5], [34.5, 49.0], [35.0, 48.5], [35.0, 47.5],
+            [34.5, 47.0], [33.5, 46.5], [32.5, 46.6]
+          ]}},
+        { type: "Feature", properties: { name: "Don", importance: "major" },
+          geometry: { type: "LineString", coordinates: [
+            [39.5, 54.0], [40.0, 52.5], [41.0, 51.0], [42.0, 49.5], [43.5, 48.5],
+            [43.0, 47.5], [42.0, 47.2], [40.5, 47.0], [39.5, 47.3]
+          ]}},
+        { type: "Feature", properties: { name: "Volga", importance: "major" },
+          geometry: { type: "LineString", coordinates: [
+            [33.0, 57.5], [35.5, 57.0], [38.0, 56.5], [40.5, 56.0], [43.0, 55.8],
+            [44.5, 55.0], [46.0, 54.0], [47.5, 53.5], [49.0, 53.0], [50.0, 51.5],
+            [49.5, 50.0], [48.5, 48.5], [47.5, 47.0], [46.5, 46.0], [47.0, 45.5]
+          ]}},
+        { type: "Feature", properties: { name: "Nile", importance: "major" },
+          geometry: { type: "LineString", coordinates: [
+            [31.5, 31.2], [31.3, 30.0], [31.2, 29.0], [31.0, 27.5], [32.5, 26.0],
+            [32.9, 24.5], [33.0, 23.0], [32.5, 21.0], [31.5, 18.5]
+          ]}},
+        { type: "Feature", properties: { name: "Euphrates", importance: "major" },
+          geometry: { type: "LineString", coordinates: [
+            [39.5, 39.0], [38.5, 37.5], [38.0, 36.5], [38.5, 35.5], [40.0, 34.5],
+            [41.5, 34.0], [43.0, 33.5], [44.5, 33.0], [46.0, 31.5], [47.5, 30.5]
+          ]}},
+        { type: "Feature", properties: { name: "Tigris", importance: "major" },
+          geometry: { type: "LineString", coordinates: [
+            [40.0, 38.5], [41.0, 37.5], [42.5, 36.5], [43.5, 35.5], [44.0, 34.5],
+            [44.5, 33.5], [45.5, 32.5], [46.5, 31.5], [47.5, 30.5]
+          ]}},
+        { type: "Feature", properties: { name: "Prut", importance: "secondary" },
+          geometry: { type: "LineString", coordinates: [
+            [24.5, 48.0], [26.5, 47.0], [27.5, 46.5], [28.0, 45.5]
+          ]}},
+        { type: "Feature", properties: { name: "Dniester", importance: "secondary" },
+          geometry: { type: "LineString", coordinates: [
+            [23.5, 49.5], [25.5, 48.5], [27.5, 47.5], [29.0, 46.8], [30.0, 46.5]
+          ]}},
+        { type: "Feature", properties: { name: "Bug (Southern)", importance: "secondary" },
+          geometry: { type: "LineString", coordinates: [
+            [30.0, 49.5], [31.0, 48.5], [31.5, 47.5], [32.0, 46.8]
+          ]}}
+    ]
+};
+
+// Historian Overlay Layers - meaningful overlays with real analytical value
 const overlayLayerDefs = {
     rivers: {
         name: "Rivers & Water",
-        // Using OpenStreetMap with custom water-only styling via Overpass
-        layer: () => L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            opacity: 0.6,
-            attribution: '© OpenStreetMap',
-            className: 'overlay-rivers',
-            // This will show the base OSM which includes water features prominently
+        // Vector GeoJSON layer showing only rivers - no background noise
+        layer: () => L.geoJSON(majorRiversGeoJSON, {
+            style: feature => ({
+                color: feature.properties.importance === "major" ? '#3b82f6' : '#60a5fa',
+                weight: feature.properties.importance === "major" ? 3 : 2,
+                opacity: 0.85,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }),
+            onEachFeature: (feature, layer) => {
+                layer.bindTooltip(feature.properties.name, {
+                    permanent: false,
+                    direction: 'center',
+                    className: 'river-label'
+                });
+            }
         })
     },
     population: {
-        name: "Cities & Population",
-        // Using CartoDB labels with higher opacity to show populated areas and city names
-        layer: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
-            attribution: '© CartoDB © OpenStreetMap contributors',
-            subdomains: 'abcd',
-            maxZoom: 19,
-            opacity: 0.8,
-            className: 'overlay-population'
-        })
+        name: "Narrative Focus",
+        // Heatmap showing intensity of location mentions in the text
+        layer: () => {
+            // Count mentions per location
+            const mentionCounts = {};
+            state.allLocations.forEach(loc => {
+                const name = loc.name;
+                mentionCounts[name] = (mentionCounts[name] || 0) + 1;
+            });
+            // Create heatmap points with intensity based on mention count
+            const heatPoints = [];
+            const maxMentions = Math.max(...Object.values(mentionCounts), 1);
+            Object.entries(mentionCounts).forEach(([name, count]) => {
+                const coords = getContextualCoords(name);
+                if (coords) {
+                    // Intensity ranges from 0.3 to 1.0 based on mention frequency
+                    const intensity = 0.3 + (count / maxMentions) * 0.7;
+                    heatPoints.push([coords[0], coords[1], intensity]);
+                }
+            });
+            return L.heatLayer(heatPoints, {
+                radius: 40,
+                blur: 25,
+                maxZoom: 10,
+                max: 1.0,
+                gradient: { 0.2: '#3b82f6', 0.5: '#8b5cf6', 0.8: '#ec4899', 1: '#f43f5e' }
+            });
+        }
     },
     terrain: {
         name: "Terrain & Elevation",
-        // Using shaded relief to show topography
+        // Using shaded relief to show topography - this one is actually useful
         layer: () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 13,
-            opacity: 0.6,
+            opacity: 0.5,
             attribution: '© Esri',
             className: 'overlay-terrain'
         })
     },
     geopolitical: {
-        name: "Geopolitical Boundaries",
-        // Using CartoDB boundaries overlay for modern political borders
-        layer: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-            attribution: '© CartoDB © OpenStreetMap',
-            subdomains: 'abcd',
-            maxZoom: 19,
-            opacity: 0.75,
-            className: 'overlay-geopolitical'
-        })
+        name: "Theaters of Conflict",
+        // Heatmap showing concentration of battles, sieges, and military events
+        layer: () => {
+            // Extract coordinates from event-type locations
+            const eventPoints = state.allLocations
+                .filter(loc => loc.type === 'event')
+                .map(loc => {
+                    const coords = getContextualCoords(loc.locationName || loc.name);
+                    // Higher intensity for events (battles are important)
+                    return coords ? [coords[0], coords[1], 0.85] : null;
+                })
+                .filter(p => p !== null);
+            // If no events found, show a message layer
+            if (eventPoints.length === 0) {
+                return L.layerGroup(); // Empty layer if no events
+            }
+            return L.heatLayer(eventPoints, {
+                radius: 35,
+                blur: 20,
+                maxZoom: 12,
+                max: 1.0,
+                gradient: { 0.3: '#22c55e', 0.5: '#eab308', 0.7: '#f97316', 1: '#ef4444' }
+            });
+        }
     }
 };
 

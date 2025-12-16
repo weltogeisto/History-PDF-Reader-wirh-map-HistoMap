@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css">
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
@@ -660,6 +661,20 @@
       height: 100%;
       background: var(--bg-dark);
     }
+    /* River label tooltips */
+    .river-label {
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      color: #93c5fd;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    .river-label::before {
+      border-top-color: rgba(30, 41, 59, 0.9) !important;
+    }
   </style>
 </head>
 <body>
@@ -721,17 +736,17 @@
           <span style="font-size:14px;">🌊</span>
           <span style="font-size:10px;">Rivers</span>
         </button>
-        <button class="layer-toggle" id="inline-layer-population" title="Population">
-          <span style="font-size:14px;">👥</span>
-          <span style="font-size:10px;">Pop</span>
+        <button class="layer-toggle" id="inline-layer-population" title="Narrative Focus Heatmap">
+          <span style="font-size:14px;">🔥</span>
+          <span style="font-size:10px;">Focus</span>
         </button>
         <button class="layer-toggle" id="inline-layer-terrain" title="Terrain">
           <span style="font-size:14px;">⛰️</span>
           <span style="font-size:10px;">Terrain</span>
         </button>
-        <button class="layer-toggle" id="inline-layer-geopolitical" title="Geopolitical">
-          <span style="font-size:14px;">🌍</span>
-          <span style="font-size:10px;">Geopolitical</span>
+        <button class="layer-toggle" id="inline-layer-geopolitical" title="Theaters of Conflict">
+          <span style="font-size:14px;">⚔️</span>
+          <span style="font-size:10px;">Conflict</span>
         </button>
       </div>
       <div id="inline-map" style="flex:1;"></div>
@@ -770,17 +785,17 @@
         <span style="font-size:14px;">🌊</span>
         <span style="font-size:10px;">Rivers</span>
       </button>
-      <button class="layer-toggle" id="layer-population" title="Population Density">
-        <span style="font-size:14px;">👥</span>
-        <span style="font-size:10px;">Pop</span>
+      <button class="layer-toggle" id="layer-population" title="Narrative Focus Heatmap">
+        <span style="font-size:14px;">🔥</span>
+        <span style="font-size:10px;">Focus</span>
       </button>
       <button class="layer-toggle" id="layer-terrain" title="Terrain & Elevation">
         <span style="font-size:14px;">⛰️</span>
         <span style="font-size:10px;">Terrain</span>
       </button>
-      <button class="layer-toggle" id="layer-geopolitical" title="Geopolitical Boundaries">
-        <span style="font-size:14px;">🌍</span>
-        <span style="font-size:10px;">Geopolitical</span>
+      <button class="layer-toggle" id="layer-geopolitical" title="Theaters of Conflict">
+        <span style="font-size:14px;">⚔️</span>
+        <span style="font-size:10px;">Conflict</span>
       </button>
     </div>
     <div id="map"></div>
