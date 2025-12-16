@@ -509,6 +509,8 @@ function toggleMoreMenu() {
 // Set view mode: panel, split-h (side-by-side), split-v (top/bottom)
 function setViewMode(mode) {
     state.viewMode = mode;
+    // Restore nav visibility when switching modes
+    readingMode.showNav();
     document.body.classList.remove('split-horizontal', 'split-vertical');
     // Reset custom sizes from previous resize actions
     const pdfViewer = document.getElementById('pdf-viewer');
@@ -745,6 +747,13 @@ async function renderAllPages() {
     document.getElementById("entityLegend").classList.remove("hidden");
     document.getElementById("timelineControls").classList.remove("hidden");
     localforage.setItem("readingPosition", { scroll: 0, index: 0, ts: Date.now() });
+
+    // Provide feedback based on detection results
+    if (state.allLocations.length === 0) {
+        showToast("No historical locations detected. Try OCR if this is a scanned document.", 'info', 5000);
+    } else {
+        showSuccess(`Found ${state.allLocations.length} location references`);
+    }
 }
 
 // Create placeholder for a page to be lazy-loaded
@@ -1031,7 +1040,11 @@ function performSearch(query) {
         }
     });
     document.getElementById("search-count").textContent = state.searchResults.length > 0 ? "1/" + state.searchResults.length : "0 found";
-    if (state.searchResults.length > 0) state.searchResults[0].scrollIntoView({ behavior: "smooth", block: "center" });
+    if (state.searchResults.length > 0) {
+        state.searchResults[0].scrollIntoView({ behavior: "smooth", block: "center" });
+    } else {
+        showToast(`No locations matching "${query}" found`, 'info', 3000);
+    }
 }
 
 // Navigate to previous or next search result
@@ -1062,7 +1075,8 @@ async function loadPDF(fileOrBlob) {
         localforage.setItem("cachedDocument", arrayBuffer);
     } catch (e) {
         hideLoading();
-        alert("Error: " + e.message);
+        showError("Failed to load PDF: " + (e.message || "Unknown error"));
+        console.error("PDF load error:", e);
     }
 }
 
@@ -1075,7 +1089,8 @@ async function performOCR(imageFile) {
         generatePDFFromText(result.data.text, "OCR Result");
     } catch (e) {
         hideLoading();
-        alert("OCR Error: " + e.message);
+        showError("OCR failed: " + (e.message || "Unknown error"));
+        console.error("OCR error:", e);
     }
 }
 
@@ -1134,6 +1149,42 @@ function updateLoading(text) {
 }
 function hideLoading() {
     document.getElementById("loadingOverlay").classList.remove("show");
+}
+
+// Toast notification system - replaces blocking alerts
+function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    const icons = {
+        error: '⚠️',
+        success: '✓',
+        info: 'ℹ️'
+    };
+
+    toast.innerHTML = `<span>${icons[type] || ''}</span><span>${message}</span>`;
+    container.appendChild(toast);
+
+    // Auto-dismiss
+    setTimeout(() => {
+        toast.classList.add('hiding');
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+
+    // Click to dismiss
+    toast.addEventListener('click', () => {
+        toast.classList.add('hiding');
+        setTimeout(() => toast.remove(), 300);
+    });
+}
+
+function showError(message) {
+    showToast(message, 'error', 5000);
+}
+
+function showSuccess(message) {
+    showToast(message, 'success', 3000);
 }
 
 // Update reading progress bar on scroll
