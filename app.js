@@ -86,7 +86,7 @@ const overlayLayerDefs = {
         // Using OpenHistoricalMap for historical geopolitical boundaries
         layer: () => L.tileLayer('https://tile.openhistoricalmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            opacity: 0.65,
+            opacity: 0.85,
             attribution: '© OpenHistoricalMap contributors',
             className: 'overlay-geopolitical'
         })
@@ -235,9 +235,9 @@ function renderRegions(targetMap, storageArray) {
                 const polygon = L.polygon(entry.coords, {
                     color: entry.color || "#3b82f6",
                     fillColor: entry.color || "#3b82f6",
-                    fillOpacity: 0.08, // Subtle visibility by default (was 0)
+                    fillOpacity: 0.25, // Visible regions by default
                     weight: 2,
-                    opacity: 0.35, // Subtle border visibility (was 0)
+                    opacity: 0.7, // Visible border
                     dashArray: "5, 5"
                 }).addTo(targetMap);
                 polygon.bindPopup("<b>" + name + "</b>");
@@ -248,8 +248,8 @@ function renderRegions(targetMap, storageArray) {
                 polygon.on('mouseover', function() {
                     if (state.activeRegionPolygon !== this) {
                         this.setStyle({
-                            fillOpacity: 0.15,
-                            opacity: 0.6,
+                            fillOpacity: 0.4,
+                            opacity: 0.9,
                             weight: 3
                         });
                     }
@@ -258,8 +258,8 @@ function renderRegions(targetMap, storageArray) {
                 polygon.on('mouseout', function() {
                     if (state.activeRegionPolygon !== this) {
                         this.setStyle({
-                            fillOpacity: 0.08,
-                            opacity: 0.35,
+                            fillOpacity: 0.25,
+                            opacity: 0.7,
                             weight: 2
                         });
                     }
@@ -282,8 +282,8 @@ function handleRegionClick(regionName, polygon) {
     state.regionPolygons.forEach(p => {
         const entry = geoDatabase[p.regionName];
         p.setStyle({
-            fillOpacity: 0.08,
-            opacity: 0.35,
+            fillOpacity: 0.25,
+            opacity: 0.7,
             weight: 2,
             color: entry?.color || "#3b82f6",
             dashArray: "5, 5"
@@ -572,12 +572,12 @@ function handleLocationClick(name, element, type = "location", eventLoc = null) 
         state.map.removeLayer(state.activeMapMarker);
         state.activeMapMarker = null;
     }
-    // Reset region styles to subtle
+    // Reset region styles to default visibility
     state.regionPolygons.forEach(p => {
         const entry = geoDatabase[p.regionName];
         p.setStyle({
-            fillOpacity: 0.05,
-            opacity: 0.4,
+            fillOpacity: 0.25,
+            opacity: 0.7,
             weight: 2,
             color: entry?.color || "#3b82f6",
             dashArray: "5, 5"
