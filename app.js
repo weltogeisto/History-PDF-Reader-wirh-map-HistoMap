@@ -1604,23 +1604,42 @@ function highlightEntityInEPUB(contentDiv, entity, chapterNum) {
 }
 
 // Library management functions
+const MAX_LIBRARY_FILE_SIZE = 20 * 1024 * 1024; // 20MB limit for IndexedDB
+
 async function saveToLibrary(hash, name, type, arrayBuffer) {
+    const fileSize = arrayBuffer.byteLength;
     const entry = {
         hash,
         name: name.replace(/\.(pdf|epub)$/i, ''),
         type,
         addedAt: Date.now(),
         lastOpened: Date.now(),
-        size: arrayBuffer.byteLength
+        size: fileSize,
+        stored: false
     };
 
-    // Save metadata
-    const library = await libraryDB.getItem('metadata') || {};
-    library[hash] = entry;
-    await libraryDB.setItem('metadata', library);
+    try {
+        const library = await libraryDB.getItem('metadata') || {};
 
-    // Save document data
-    await libraryDB.setItem(`doc_${hash}`, arrayBuffer);
+        // Only store file data if under size limit
+        if (fileSize <= MAX_LIBRARY_FILE_SIZE) {
+            await libraryDB.setItem(`doc_${hash}`, arrayBuffer);
+            entry.stored = true;
+        } else {
+            showToast(`Large file - metadata saved but file not stored in library`, 'info', 3000);
+        }
+
+        library[hash] = entry;
+        await libraryDB.setItem('metadata', library);
+    } catch (e) {
+        console.error('Library save error:', e);
+        // Try to save just metadata
+        try {
+            const library = await libraryDB.getItem('metadata') || {};
+            library[hash] = entry;
+            await libraryDB.setItem('metadata', library);
+        } catch (_) {}
+    }
 }
 
 async function loadLibrary() {
@@ -1640,11 +1659,11 @@ async function loadLibrary() {
     }
 
     grid.innerHTML = entries.map(entry => `
-        <div class="library-item" data-hash="${entry.hash}">
+        <div class="library-item ${entry.stored ? '' : 'library-item-unavailable'}" data-hash="${entry.hash}" data-stored="${entry.stored !== false}">
             <button class="library-item-delete" data-hash="${entry.hash}" title="Remove">✕</button>
             <div class="library-item-icon">${entry.type === 'epub' ? '📖' : '📄'}</div>
             <div class="library-item-title" title="${entry.name}">${entry.name}</div>
-            <div class="library-item-meta">${entry.type.toUpperCase()} • ${formatFileSize(entry.size)}</div>
+            <div class="library-item-meta">${entry.type.toUpperCase()} • ${formatFileSize(entry.size)}${entry.stored === false ? ' • Not stored' : ''}</div>
         </div>
     `).join('');
 
@@ -1675,9 +1694,15 @@ async function openFromLibrary(hash) {
             return;
         }
 
+        // Check if file was stored
+        if (entry.stored === false) {
+            showToast("File too large - please re-upload to view", 'info', 4000);
+            return;
+        }
+
         const arrayBuffer = await libraryDB.getItem(`doc_${hash}`);
         if (!arrayBuffer) {
-            showError("Document data not found");
+            showError("Document data not found - please re-upload");
             return;
         }
 
