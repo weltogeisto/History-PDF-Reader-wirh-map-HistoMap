@@ -54,12 +54,13 @@ const overlayLayerDefs = {
         })
     },
     population: {
-        name: "Population & Cities",
-        // Using labels overlay to show cities and populated areas
-        layer: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png', {
+        name: "Cities & Population",
+        // Using CartoDB labels with higher opacity to show populated areas and city names
+        layer: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+            attribution: '© CartoDB © OpenStreetMap contributors',
+            subdomains: 'abcd',
             maxZoom: 19,
-            opacity: 0.9,
-            attribution: '© CartoDB',
+            opacity: 0.8,
             className: 'overlay-population'
         })
     },
@@ -75,11 +76,12 @@ const overlayLayerDefs = {
     },
     geopolitical: {
         name: "Geopolitical Boundaries",
-        // Using OpenHistoricalMap for historical geopolitical boundaries
-        layer: () => L.tileLayer('https://tile.openhistoricalmap.org/{z}/{x}/{y}.png', {
+        // Using CartoDB boundaries overlay for modern political borders
+        layer: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+            attribution: '© CartoDB © OpenStreetMap',
+            subdomains: 'abcd',
             maxZoom: 19,
-            opacity: 0.85,
-            attribution: '© OpenHistoricalMap contributors',
+            opacity: 0.75,
             className: 'overlay-geopolitical'
         })
     }
@@ -470,7 +472,16 @@ function initInlineMap() {
     // Clear old inline polygons and render new
     state.inlineRegionPolygons = [];
     renderRegions(state.inlineMap, state.inlineRegionPolygons);
-    setTimeout(() => state.inlineMap?.invalidateSize(), 100);
+    // Multiple invalidateSize calls to ensure map renders properly
+    setTimeout(() => {
+        if (state.inlineMap) {
+            state.inlineMap.invalidateSize();
+            // Force redraw of tiles
+            if (state.inlineTileLayer) state.inlineTileLayer.redraw();
+        }
+    }, 100);
+    setTimeout(() => state.inlineMap?.invalidateSize(), 300);
+    setTimeout(() => state.inlineMap?.invalidateSize(), 500);
 }
 
 // Initialize resize handle for split views
