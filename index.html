@@ -109,6 +109,31 @@
     .header-btn:active {
       transform: scale(0.95);
     }
+    /* Mobile: collapse header actions */
+    .show-mobile-only {
+      display: none !important;
+    }
+    @media (max-width: 480px) {
+      .app-logo span:last-child {
+        font-size: 1rem;
+      }
+      .header-btn.hide-mobile {
+        display: none;
+      }
+      .header-actions {
+        gap: 4px;
+      }
+      .header-btn {
+        width: 36px;
+        height: 36px;
+      }
+      .show-mobile-only {
+        display: flex !important;
+      }
+      .menu-divider.show-mobile-only {
+        display: block !important;
+      }
+    }
     /* Main Content Area */
     .main-content {
       margin-top: var(--nav-height);
@@ -767,13 +792,13 @@
       <span>ScrollThroughTime</span>
     </div>
     <div class="header-actions">
-      <button class="header-btn" id="auto-map-toggle" title="Auto Map" style="background: rgba(20, 184, 166, 0.8);">
+      <button class="header-btn hide-mobile" id="auto-map-toggle" title="Auto Map" style="background: rgba(20, 184, 166, 0.8);">
         <span style="font-size: 0.65rem; font-weight: 600;">AUTO</span>
       </button>
       <button class="header-btn" id="search-toggle" title="Search">
         <i data-feather="search" style="width:20px;height:20px;"></i>
       </button>
-      <button class="header-btn" id="dark-mode-toggle" title="Theme">
+      <button class="header-btn hide-mobile" id="dark-mode-toggle" title="Theme">
         <i data-feather="moon" style="width:20px;height:20px;"></i>
       </button>
     </div>
@@ -880,6 +905,15 @@
   <!-- More Menu -->
   <div class="more-menu" id="moreMenu">
     <h3>Options</h3>
+    <button class="menu-item show-mobile-only" id="menu-auto-toggle">
+      <i data-feather="zap" style="width:20px;height:20px;"></i>
+      <span>Auto Map: <strong id="menu-auto-status">ON</strong></span>
+    </button>
+    <button class="menu-item show-mobile-only" id="menu-theme-toggle">
+      <i data-feather="moon" style="width:20px;height:20px;"></i>
+      <span>Toggle Theme</span>
+    </button>
+    <div class="menu-divider show-mobile-only"></div>
     <button class="menu-item" id="menu-test-pdf">
       <i data-feather="file-text" style="width:20px;height:20px;"></i>
       <span>Load Test PDF</span>

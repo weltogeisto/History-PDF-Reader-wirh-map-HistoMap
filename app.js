@@ -1251,6 +1251,7 @@ const readingMode = {
 function toggleAutoMap() {
     state.autoMap = !state.autoMap;
     const btn = document.getElementById('auto-map-toggle');
+    const menuStatus = document.getElementById('menu-auto-status');
     if (state.autoMap) {
         btn.style.background = 'rgba(20, 184, 166, 0.8)';
         btn.innerHTML = '<span style="font-size: 0.65rem; font-weight: 600;">AUTO</span>';
@@ -1258,6 +1259,7 @@ function toggleAutoMap() {
         btn.style.background = 'rgba(100, 116, 139, 0.5)';
         btn.innerHTML = '<span style="font-size: 0.65rem; font-weight: 600;">OFF</span>';
     }
+    if (menuStatus) menuStatus.textContent = state.autoMap ? "ON" : "OFF";
 }
 
 // Export modal toggle
@@ -1343,8 +1345,17 @@ document.getElementById("export-geojson")?.addEventListener("click", exportGeoJS
 document.getElementById("export-kml")?.addEventListener("click", exportKML);
 document.getElementById("export-csv")?.addEventListener("click", exportCSV);
 document.getElementById("close-export-modal")?.addEventListener("click", toggleExportModal);
-// Auto Map toggle
+// Auto Map toggle (header button)
 document.getElementById("auto-map-toggle")?.addEventListener("click", toggleAutoMap);
+// Mobile menu: Auto Map toggle
+document.getElementById("menu-auto-toggle")?.addEventListener("click", () => {
+    toggleAutoMap();
+    document.getElementById("menu-auto-status").textContent = state.autoMap ? "ON" : "OFF";
+});
+// Mobile menu: Theme toggle (placeholder - app is dark-only for now)
+document.getElementById("menu-theme-toggle")?.addEventListener("click", () => {
+    showToast("Theme switching coming soon!", "info", 2000);
+});
 // Map style buttons
 document.querySelectorAll('.map-style-btn').forEach(btn => {
     btn.addEventListener('click', () => changeMapStyle(btn.dataset.style));
