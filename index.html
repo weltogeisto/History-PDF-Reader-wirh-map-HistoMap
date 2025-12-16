@@ -926,6 +926,19 @@
     .library-item:hover .library-item-delete {
       display: flex;
     }
+    .library-item-unavailable {
+      opacity: 0.6;
+    }
+    .library-item-unavailable .library-item-icon::after {
+      content: '⚠️';
+      font-size: 0.8rem;
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+    }
+    .library-item-icon {
+      position: relative;
+    }
     .library-empty {
       text-align: center;
       color: #64748b;
