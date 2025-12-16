@@ -43,7 +43,8 @@ const state = {
     inlineTileLayer: null,
     overlayLayers: {}, // Track active overlay layers
     documentHash: null, // Hash of current document for annotation storage
-    userAnnotations: [] // User-added annotations
+    userAnnotations: [], // User-added annotations
+    regionsVisible: false // Whether region polygons are visible
 };
 
 // Document library database
@@ -440,7 +441,7 @@ const mapTiles = {
     satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr: "© Esri" }
 };
 
-// Render region polygons to a map and track them
+// Render region polygons to a map and track them (hidden until document loaded)
 function renderRegions(targetMap, storageArray) {
     if (!targetMap) return;
     Object.entries(geoDatabase).forEach(([name, entry]) => {
@@ -449,18 +450,18 @@ function renderRegions(targetMap, storageArray) {
                 const polygon = L.polygon(entry.coords, {
                     color: entry.color || "#3b82f6",
                     fillColor: entry.color || "#3b82f6",
-                    fillOpacity: 0.25, // Visible regions by default
-                    weight: 2,
-                    opacity: 0.7, // Visible border
+                    fillOpacity: 0, // Hidden until document loaded
+                    weight: 0,
+                    opacity: 0,
                     dashArray: "5, 5"
                 }).addTo(targetMap);
                 polygon.bindPopup("<b>" + name + "</b>");
                 polygon.regionName = name;
                 storageArray.push(polygon);
 
-                // Add hover effect for better UX
+                // Add hover effect for better UX (only when visible)
                 polygon.on('mouseover', function() {
-                    if (state.activeRegionPolygon !== this) {
+                    if (state.activeRegionPolygon !== this && state.regionsVisible) {
                         this.setStyle({
                             fillOpacity: 0.4,
                             opacity: 0.9,
@@ -470,7 +471,7 @@ function renderRegions(targetMap, storageArray) {
                 });
 
                 polygon.on('mouseout', function() {
-                    if (state.activeRegionPolygon !== this) {
+                    if (state.activeRegionPolygon !== this && state.regionsVisible) {
                         this.setStyle({
                             fillOpacity: 0.25,
                             opacity: 0.7,
@@ -487,6 +488,26 @@ function renderRegions(targetMap, storageArray) {
                 // ignore invalid polygons
             }
         }
+    });
+}
+
+// Show region polygons (called when document is loaded)
+function showRegionPolygons() {
+    state.regionsVisible = true;
+    state.regionPolygons.forEach(p => {
+        const entry = geoDatabase[p.regionName];
+        p.setStyle({
+            fillOpacity: 0.25,
+            opacity: 0.7,
+            weight: 2
+        });
+    });
+    state.inlineRegionPolygons.forEach(p => {
+        p.setStyle({
+            fillOpacity: 0.25,
+            opacity: 0.7,
+            weight: 2
+        });
     });
 }
 
@@ -877,6 +898,17 @@ function handleLocationClick(name, element, type = "location", eventLoc = null) 
             dashArray: "5, 5"
         });
     });
+    // Also reset inline map regions
+    state.inlineRegionPolygons.forEach(p => {
+        const entry = geoDatabase[p.regionName];
+        p.setStyle({
+            fillOpacity: 0.25,
+            opacity: 0.7,
+            weight: 2,
+            color: entry?.color || "#3b82f6",
+            dashArray: "5, 5"
+        });
+    });
     let coords = type === "event" && eventLoc ? (eventLocations[eventLoc] || getContextualCoords(eventLoc)) : getContextualCoords(name);
     const entry = geoDatabase[name];
     if (entry?.type === "region" && entry.coords && Array.isArray(entry.coords[0])) {
@@ -890,17 +922,34 @@ function handleLocationClick(name, element, type = "location", eventLoc = null) 
                 dashArray: null
             });
             state.map.fitBounds(poly.getBounds(), { padding: [30, 30] });
+            state.activeRegionPolygon = poly;
+            // Also update inline map if in split view
+            if (state.viewMode !== 'panel' && state.inlineMap) {
+                const inlinePoly = state.inlineRegionPolygons.find(p => p.regionName === name);
+                if (inlinePoly) {
+                    inlinePoly.setStyle({
+                        fillOpacity: 0.25,
+                        opacity: 1,
+                        weight: 3,
+                        color: "#dc2626",
+                        dashArray: null
+                    });
+                    state.inlineMap.fitBounds(inlinePoly.getBounds(), { padding: [30, 30] });
+                }
+            }
         }
     } else if (coords) {
         addToContext(name, coords);
         state.map.setView(coords, 7);
         const color = type === "event" ? "#ec4899" : "#ef4444";
         state.activeMapMarker = L.circleMarker(coords, { radius: 15, fillColor: color, color: "#fff", weight: 3, fillOpacity: 0.7 }).addTo(state.map).bindPopup("<b>" + name + "</b>").openPopup();
+        // Also update inline map if in split view
+        if (state.viewMode !== 'panel' && state.inlineMap) {
+            state.inlineMap.setView(coords, 7);
+        }
     }
+    // Open map panel if in panel mode
     if (!state.mapOpen && state.viewMode === 'panel') toggleMap();
-    if (state.viewMode !== 'panel' && state.inlineMap && coords) {
-        state.inlineMap.setView(coords, 7);
-    }
 }
 
 // Render all pages of the loaded PDF and extract entities
@@ -938,6 +987,7 @@ async function renderAllPages() {
     hideLoading();
     updateTimeline();
     rescaleOverlays();
+    showRegionPolygons(); // Show regions now that document is loaded
     document.getElementById("entityLegend").classList.remove("hidden");
     document.getElementById("timelineControls").classList.remove("hidden");
     localforage.setItem("readingPosition", { scroll: 0, index: 0, ts: Date.now() });
@@ -1481,6 +1531,7 @@ async function renderEPUB() {
 
     hideLoading();
     updateTimeline();
+    showRegionPolygons(); // Show regions now that document is loaded
     document.getElementById("entityLegend").classList.remove("hidden");
     document.getElementById("timelineControls").classList.remove("hidden");
 
