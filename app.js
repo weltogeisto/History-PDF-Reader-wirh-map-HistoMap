@@ -1143,6 +1143,59 @@ function updateReadingProgress() {
     document.getElementById("readingProgress").style.width = Math.min(percent, 100) + "%";
 }
 
+// Reading mode: auto-hide navigation on scroll for better landscape viewing
+const readingMode = {
+    lastScrollTop: 0,
+    scrollThreshold: 50, // Minimum scroll distance to trigger hide/show
+    isNavHidden: false,
+
+    handleScroll() {
+        // Don't hide nav if map panel or any overlay is open
+        if (state.mapOpen || state.moreMenuOpen || state.searchOpen) {
+            this.showNav();
+            return;
+        }
+
+        const viewer = document.getElementById("pdf-viewer");
+        const currentScroll = viewer.scrollTop;
+        const scrollDelta = currentScroll - this.lastScrollTop;
+
+        // Don't hide if at the top of the page
+        if (currentScroll < 100) {
+            this.showNav();
+            this.lastScrollTop = currentScroll;
+            return;
+        }
+
+        // Check if we've scrolled enough to trigger
+        if (Math.abs(scrollDelta) < this.scrollThreshold) return;
+
+        if (scrollDelta > 0 && !this.isNavHidden) {
+            // Scrolling down - hide nav
+            this.hideNav();
+        } else if (scrollDelta < 0 && this.isNavHidden) {
+            // Scrolling up - show nav
+            this.showNav();
+        }
+
+        this.lastScrollTop = currentScroll;
+    },
+
+    hideNav() {
+        this.isNavHidden = true;
+        document.querySelector('.app-header')?.classList.add('nav-hidden');
+        document.querySelector('.bottom-nav')?.classList.add('nav-hidden');
+        document.getElementById('timelineControls')?.classList.add('nav-hidden');
+    },
+
+    showNav() {
+        this.isNavHidden = false;
+        document.querySelector('.app-header')?.classList.remove('nav-hidden');
+        document.querySelector('.bottom-nav')?.classList.remove('nav-hidden');
+        document.getElementById('timelineControls')?.classList.remove('nav-hidden');
+    }
+};
+
 // Toggle auto-map behaviour
 function toggleAutoMap() {
     state.autoMap = !state.autoMap;
@@ -1279,8 +1332,11 @@ document.getElementById("timeline-bar").addEventListener("click", e => {
     const idx = Math.floor((e.clientX - rect.left) / rect.width * state.allLocations.length);
     navigateToLocation(Math.min(idx, state.allLocations.length - 1));
 });
-// Reading progress scroll
-document.getElementById("pdf-viewer").addEventListener("scroll", updateReadingProgress);
+// Reading progress scroll and reading mode auto-hide
+document.getElementById("pdf-viewer").addEventListener("scroll", () => {
+    updateReadingProgress();
+    readingMode.handleScroll();
+});
 // Window resize
 window.addEventListener("resize", rescaleOverlays);
 // Gesture: swipe down to close map panel

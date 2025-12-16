@@ -20,6 +20,7 @@ const CDN_ASSETS = [
   'https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css',
   'https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css',
   'https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js',
+  'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js',
   'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
   'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js',
   'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js',
