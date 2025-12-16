@@ -37,8 +37,46 @@ const state = {
     viewMode: 'panel',
     currentTileLayer: null,
     inlineTileLayer: null,
-    overlayLayers: {} // Track active overlay layers
+    overlayLayers: {}, // Track active overlay layers
+    documentHash: null, // Hash of current document for annotation storage
+    userAnnotations: [] // User-added annotations
 };
+
+// Annotation persistence using localforage
+const annotationDB = localforage.createInstance({ name: 'histomap-annotations' });
+
+// Generate a simple hash for document identification
+async function generateDocumentHash(arrayBuffer) {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Save annotations for current document
+async function saveAnnotations() {
+    if (!state.documentHash) return;
+    const data = {
+        locations: state.allLocations.map(loc => ({
+            name: loc.name,
+            page: loc.page,
+            type: loc.type,
+            locationName: loc.locationName
+        })),
+        userAnnotations: state.userAnnotations,
+        lastAccessed: Date.now()
+    };
+    await annotationDB.setItem(state.documentHash, data);
+}
+
+// Load annotations for a document
+async function loadAnnotations(hash) {
+    try {
+        return await annotationDB.getItem(hash);
+    } catch (e) {
+        console.warn('Failed to load annotations:', e);
+        return null;
+    }
+}
 
 // Major historical rivers GeoJSON - simplified coordinates for key rivers
 const majorRiversGeoJSON = {
@@ -185,7 +223,81 @@ const overlayLayerDefs = {
                 gradient: { 0.3: '#22c55e', 0.5: '#eab308', 0.7: '#f97316', 1: '#ef4444' }
             });
         }
+    },
+    borders: {
+        name: "Historical Borders",
+        // Empire borders circa 1800-1850
+        layer: () => L.geoJSON(historicalBordersGeoJSON, {
+            style: feature => ({
+                color: feature.properties.color || '#6b7280',
+                fillColor: feature.properties.color || '#6b7280',
+                fillOpacity: 0.15,
+                weight: 2,
+                opacity: 0.8,
+                dashArray: '8, 4'
+            }),
+            onEachFeature: (feature, layer) => {
+                layer.bindTooltip(`${feature.properties.name} (c. ${feature.properties.period})`, {
+                    permanent: false,
+                    direction: 'center',
+                    className: 'empire-label'
+                });
+                layer.bindPopup(`<b>${feature.properties.name}</b><br>Period: c. ${feature.properties.period}`);
+            }
+        })
     }
+};
+
+// Historical empire borders GeoJSON (simplified, circa 1800-1850)
+const historicalBordersGeoJSON = {
+    type: "FeatureCollection",
+    features: [
+        {
+            type: "Feature",
+            properties: { name: "Ottoman Empire", period: "1800", color: "#10b981" },
+            geometry: {
+                type: "Polygon",
+                coordinates: [[
+                    [26, 45], [29, 46], [35, 46], [40, 41], [44, 37],
+                    [36, 31], [34, 29], [31, 31], [25, 31], [20, 35],
+                    [20, 40], [22, 42], [26, 45]
+                ]]
+            }
+        },
+        {
+            type: "Feature",
+            properties: { name: "Russian Empire", period: "1800", color: "#3b82f6" },
+            geometry: {
+                type: "Polygon",
+                coordinates: [[
+                    [20, 55], [30, 60], [50, 65], [70, 60], [60, 50],
+                    [50, 45], [40, 42], [35, 46], [28, 50], [20, 55]
+                ]]
+            }
+        },
+        {
+            type: "Feature",
+            properties: { name: "Austrian Empire", period: "1800", color: "#f59e0b" },
+            geometry: {
+                type: "Polygon",
+                coordinates: [[
+                    [10, 47], [17, 50], [22, 50], [22, 45], [20, 43],
+                    [15, 44], [12, 45], [10, 47]
+                ]]
+            }
+        },
+        {
+            type: "Feature",
+            properties: { name: "Persian Empire", period: "1800", color: "#8b5cf6" },
+            geometry: {
+                type: "Polygon",
+                coordinates: [[
+                    [44, 40], [48, 40], [55, 35], [60, 30], [55, 25],
+                    [48, 27], [44, 32], [44, 40]
+                ]]
+            }
+        }
+    ]
 };
 
 // GeoDatabase (locations and regions)
@@ -636,7 +748,51 @@ function initResizeHandle() {
     }
 }
 
-// Extract entities for a page of text
+// Disambiguation rules for ambiguous location names
+const disambiguationRules = {
+    "Georgia": {
+        caucasus: { keywords: ["Ottoman", "Russia", "Caucasus", "Tbilisi", "Persia", "Byzantine", "Colchis", "Black Sea"], coords: [41.7151, 44.8271] },
+        us: { keywords: ["Atlanta", "Confederate", "Sherman", "Civil War", "United States", "American"], coords: [32.1656, -82.9001] }
+    },
+    "Alexandria": {
+        egypt: { keywords: ["Egypt", "Nile", "Pharaoh", "Ptolemy", "Mediterranean", "Ottoman", "Napoleon"], coords: [31.2001, 29.9187] },
+        virginia: { keywords: ["Virginia", "Washington", "Potomac", "American", "Civil War"], coords: [38.8048, -77.0469] }
+    },
+    "Memphis": {
+        egypt: { keywords: ["Egypt", "Pharaoh", "Nile", "Ancient", "Pyramid"], coords: [29.8448, 31.2501] },
+        us: { keywords: ["Tennessee", "Mississippi", "Elvis", "Blues", "American"], coords: [35.1495, -90.0490] }
+    },
+    "Tripoli": {
+        libya: { keywords: ["Libya", "Ottoman", "Barbary", "Mediterranean", "Africa", "Gaddafi"], coords: [32.8872, 13.1913] },
+        lebanon: { keywords: ["Lebanon", "Crusade", "Levant", "Phoenicia"], coords: [34.4367, 35.8497] }
+    }
+};
+
+// Disambiguate location based on surrounding text context
+function disambiguateLocation(name, text, matchIndex) {
+    const rules = disambiguationRules[name];
+    if (!rules) return null;
+
+    // Get surrounding context (200 chars before and after)
+    const contextStart = Math.max(0, matchIndex - 200);
+    const contextEnd = Math.min(text.length, matchIndex + name.length + 200);
+    const context = text.slice(contextStart, contextEnd).toLowerCase();
+
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const [region, rule] of Object.entries(rules)) {
+        const score = rule.keywords.filter(kw => context.includes(kw.toLowerCase())).length;
+        if (score > bestScore) {
+            bestScore = score;
+            bestMatch = { region, coords: rule.coords };
+        }
+    }
+
+    return bestMatch;
+}
+
+// Extract entities for a page of text with disambiguation
 function extractEntitiesForPage(text) {
     const entities = [], found = new Set();
     Object.entries(geoDatabase).forEach(([loc, entry]) => {
@@ -647,7 +803,24 @@ function extractEntitiesForPage(text) {
             const match = regex.exec(text);
             if (match && !found.has(loc.toLowerCase())) {
                 found.add(loc.toLowerCase());
-                entities.push({ text: match[0], type: entry.type === "region" ? "region" : "location", name: loc, index: match.index, length: match[0].length });
+
+                // Check if disambiguation is needed
+                const disambiguation = disambiguateLocation(loc, text, match.index);
+                const entity = {
+                    text: match[0],
+                    type: entry.type === "region" ? "region" : "location",
+                    name: loc,
+                    index: match.index,
+                    length: match[0].length
+                };
+
+                // Add disambiguation info if found
+                if (disambiguation) {
+                    entity.disambiguatedRegion = disambiguation.region;
+                    entity.disambiguatedCoords = disambiguation.coords;
+                }
+
+                entities.push(entity);
                 break;
             }
         }
@@ -723,6 +896,11 @@ async function renderAllPages() {
     state.recentContext = [];
     state.markerCluster.clearLayers();
     state.allMarkers = [];
+
+    // Reset virtualization state
+    virtualScrollConfig.renderedPages.clear();
+    virtualScrollConfig.pageHeights.clear();
+
     showLoading("Rendering pages...");
 
     // Lazy loading: Only render first 5 pages initially, rest on demand
@@ -732,6 +910,7 @@ async function renderAllPages() {
         if (pageNum <= initialPages) {
             updateLoading("Page " + pageNum + "/" + state.pdfDoc.numPages);
             await renderPage(pageNum);
+            virtualScrollConfig.renderedPages.add(pageNum);
         } else {
             // Create placeholder for lazy loading
             createPagePlaceholder(pageNum);
@@ -775,31 +954,115 @@ function createPagePlaceholder(pageNum) {
     container.appendChild(pageWrapper);
 }
 
-// Set up intersection observer for lazy loading
+// Virtualized scrolling configuration
+const virtualScrollConfig = {
+    pagesBuffer: 3, // Keep this many pages above/below viewport rendered
+    unloadThreshold: 8, // Unload pages more than this many pages away
+    pageHeights: new Map(), // Cache of page heights for virtualization
+    renderedPages: new Set(), // Currently rendered pages
+    observer: null
+};
+
+// Set up intersection observer for lazy loading and virtualization
 function setupLazyLoading() {
-    const observer = new IntersectionObserver((entries) => {
+    // Unload observer - watches pages to potentially unload them
+    const unloadObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            if (entry.isIntersecting && entry.target.classList.contains('pdf-page-placeholder')) {
+            if (!entry.isIntersecting) {
                 const pageNum = parseInt(entry.target.dataset.page);
-                observer.unobserve(entry.target);
-                renderPage(pageNum)
-                    .then(() => {
-                        rescaleOverlays();
-                        updateTimeline();
-                    })
-                    .catch(err => {
-                        console.error(`Failed to render page ${pageNum}:`, err);
-                        // Show error in placeholder
-                        entry.target.innerHTML = `<div class="page-number" style="color: #ef4444;">Page ${pageNum} failed to load</div>`;
-                        entry.target.classList.remove('pdf-page-placeholder');
-                    });
+                // Check if page is far enough away to unload
+                const currentPage = getCurrentVisiblePage();
+                if (Math.abs(pageNum - currentPage) > virtualScrollConfig.unloadThreshold) {
+                    unloadPage(pageNum);
+                }
             }
         });
-    }, { rootMargin: '600px' }); // Increased for smoother scrolling
+    }, { rootMargin: '2000px' });
 
-    document.querySelectorAll('.pdf-page-placeholder').forEach(el => {
-        observer.observe(el);
+    // Load observer - watches placeholders to load pages
+    virtualScrollConfig.observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const pageNum = parseInt(entry.target.dataset.page);
+                const isPlaceholder = entry.target.classList.contains('pdf-page-placeholder');
+
+                if (isPlaceholder && !virtualScrollConfig.renderedPages.has(pageNum)) {
+                    virtualScrollConfig.observer.unobserve(entry.target);
+                    renderPage(pageNum)
+                        .then(() => {
+                            virtualScrollConfig.renderedPages.add(pageNum);
+                            rescaleOverlays();
+                            updateTimeline();
+                            // Re-observe for potential unloading
+                            const newWrapper = document.querySelector(`[data-page="${pageNum}"]`);
+                            if (newWrapper) unloadObserver.observe(newWrapper);
+                        })
+                        .catch(err => {
+                            console.error(`Failed to render page ${pageNum}:`, err);
+                            entry.target.innerHTML = `<div class="page-number" style="color: #ef4444;">Page ${pageNum} failed to load</div>`;
+                            entry.target.classList.remove('pdf-page-placeholder');
+                        });
+                }
+            }
+        });
+    }, { rootMargin: '800px' });
+
+    document.querySelectorAll('.pdf-page-wrapper').forEach(el => {
+        if (el.classList.contains('pdf-page-placeholder')) {
+            virtualScrollConfig.observer.observe(el);
+        } else {
+            unloadObserver.observe(el);
+        }
     });
+}
+
+// Get the currently visible page number
+function getCurrentVisiblePage() {
+    const viewer = document.getElementById('pdf-viewer');
+    const viewerRect = viewer.getBoundingClientRect();
+    const viewerCenter = viewerRect.top + viewerRect.height / 2;
+
+    const pages = document.querySelectorAll('.pdf-page-wrapper');
+    for (const page of pages) {
+        const rect = page.getBoundingClientRect();
+        if (rect.top <= viewerCenter && rect.bottom >= viewerCenter) {
+            return parseInt(page.dataset.page) || 1;
+        }
+    }
+    return 1;
+}
+
+// Unload a page to save memory (replace with placeholder)
+function unloadPage(pageNum) {
+    const pageWrapper = document.querySelector(`[data-page="${pageNum}"]`);
+    if (!pageWrapper || pageWrapper.classList.contains('pdf-page-placeholder')) return;
+
+    // Store the height before unloading for consistent scroll position
+    const height = pageWrapper.offsetHeight;
+    virtualScrollConfig.pageHeights.set(pageNum, height);
+
+    // Remove locations from this page from the global state
+    state.allLocations = state.allLocations.filter(loc => loc.page !== pageNum);
+
+    // Replace with placeholder
+    pageWrapper.innerHTML = '';
+    pageWrapper.className = 'pdf-page-wrapper pdf-page-placeholder';
+    pageWrapper.style.minHeight = height + 'px';
+    pageWrapper.style.display = 'flex';
+    pageWrapper.style.alignItems = 'center';
+    pageWrapper.style.justifyContent = 'center';
+
+    const pageNumber = document.createElement('div');
+    pageNumber.className = 'page-number';
+    pageNumber.textContent = `Page ${pageNum} - Scroll to load`;
+    pageWrapper.appendChild(pageNumber);
+
+    virtualScrollConfig.renderedPages.delete(pageNum);
+
+    // Re-observe for loading
+    if (virtualScrollConfig.observer) {
+        virtualScrollConfig.observer.observe(pageWrapper);
+    }
 }
 
 // Render a single page
@@ -936,9 +1199,11 @@ async function renderPage(pageNum) {
                     hl.dataset.heightV = hV;
                     hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
                     textOverlay.appendChild(hl);
-                    state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName });
+                    state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName, disambiguatedCoords: entity.disambiguatedCoords });
 
-                    let coords = entity.type === "event" && entity.locationName ? (eventLocations[entity.locationName] || getContextualCoords(entity.locationName)) : getContextualCoords(entity.name);
+                    // Use disambiguated coordinates if available, otherwise fall back to default
+                    let coords = entity.disambiguatedCoords ||
+                        (entity.type === "event" && entity.locationName ? (eventLocations[entity.locationName] || getContextualCoords(entity.locationName)) : getContextualCoords(entity.name));
                     if (coords) {
                         addToContext(entity.name, coords);
                         const marker = L.marker(coords).bindPopup("<b>" + entity.name + "</b><br>Page " + pageNum);
@@ -1075,10 +1340,18 @@ async function loadPDF(fileOrBlob) {
     try {
         showLoading("Loading PDF...");
         const arrayBuffer = await fileOrBlob.arrayBuffer();
+
+        // Generate document hash for annotation persistence
+        state.documentHash = await generateDocumentHash(arrayBuffer);
+
         state.pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
         document.getElementById("pdf-placeholder").classList.add("hidden");
         document.getElementById("pdf-container").classList.remove("hidden");
         await renderAllPages();
+
+        // Save annotations after processing
+        await saveAnnotations();
+
         localforage.setItem("cachedDocument", arrayBuffer);
     } catch (e) {
         hideLoading();
@@ -1372,11 +1645,13 @@ document.getElementById("layer-rivers")?.addEventListener("click", () => toggleO
 document.getElementById("layer-population")?.addEventListener("click", () => toggleOverlayLayer('population'));
 document.getElementById("layer-terrain")?.addEventListener("click", () => toggleOverlayLayer('terrain'));
 document.getElementById("layer-geopolitical")?.addEventListener("click", () => toggleOverlayLayer('geopolitical'));
+document.getElementById("layer-borders")?.addEventListener("click", () => toggleOverlayLayer('borders'));
 // Inline map overlay toggles
 document.getElementById("inline-layer-rivers")?.addEventListener("click", () => toggleOverlayLayer('rivers'));
 document.getElementById("inline-layer-population")?.addEventListener("click", () => toggleOverlayLayer('population'));
 document.getElementById("inline-layer-terrain")?.addEventListener("click", () => toggleOverlayLayer('terrain'));
 document.getElementById("inline-layer-geopolitical")?.addEventListener("click", () => toggleOverlayLayer('geopolitical'));
+document.getElementById("inline-layer-borders")?.addEventListener("click", () => toggleOverlayLayer('borders'));
 // Inline map style buttons
 document.querySelectorAll('#inline-map-controls .map-style-btn').forEach(btn => {
     btn.addEventListener('click', () => changeMapStyle(btn.dataset.style));
