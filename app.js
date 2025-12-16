@@ -14,6 +14,9 @@ if ('serviceWorker' in navigator) {
 // Global application state
 const state = {
     pdfDoc: null,
+    epubBook: null,
+    documentType: null, // 'pdf' or 'epub'
+    documentName: null,
     map: null,
     inlineMap: null,
     regionPolygons: [],
@@ -34,6 +37,7 @@ const state = {
     mapOpen: false,
     searchOpen: false,
     moreMenuOpen: false,
+    libraryOpen: false,
     viewMode: 'panel',
     currentTileLayer: null,
     inlineTileLayer: null,
@@ -41,6 +45,9 @@ const state = {
     documentHash: null, // Hash of current document for annotation storage
     userAnnotations: [] // User-added annotations
 };
+
+// Document library database
+const libraryDB = localforage.createInstance({ name: 'histomap-library' });
 
 // Annotation persistence using localforage
 const annotationDB = localforage.createInstance({ name: 'histomap-annotations' });
@@ -648,7 +655,15 @@ function setViewMode(mode) {
     }
     // Close the more menu if open
     if (state.moreMenuOpen) toggleMoreMenu();
-    setTimeout(rescaleOverlays, 100);
+    // Multiple rescale calls to handle CSS transition timing
+    setTimeout(rescaleOverlays, 50);
+    setTimeout(rescaleOverlays, 200);
+    setTimeout(rescaleOverlays, 400);
+    // Force a reflow after transitions complete
+    setTimeout(() => {
+        rescaleOverlays();
+        window.dispatchEvent(new Event('resize'));
+    }, 500);
 }
 
 // Initialize the inline map for split views
@@ -1336,13 +1351,16 @@ function clearSearch() {
 }
 
 // Load a PDF file into the viewer
-async function loadPDF(fileOrBlob) {
+async function loadPDF(fileOrBlob, fileName = 'Document') {
     try {
         showLoading("Loading PDF...");
         const arrayBuffer = await fileOrBlob.arrayBuffer();
 
         // Generate document hash for annotation persistence
         state.documentHash = await generateDocumentHash(arrayBuffer);
+        state.documentType = 'pdf';
+        state.documentName = fileName;
+        state.epubBook = null;
 
         state.pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
         document.getElementById("pdf-placeholder").classList.add("hidden");
@@ -1352,12 +1370,312 @@ async function loadPDF(fileOrBlob) {
         // Save annotations after processing
         await saveAnnotations();
 
+        // Save to library
+        await saveToLibrary(state.documentHash, fileName, 'pdf', arrayBuffer);
+
         localforage.setItem("cachedDocument", arrayBuffer);
+        localforage.setItem("cachedDocumentType", 'pdf');
+        localforage.setItem("cachedDocumentName", fileName);
     } catch (e) {
         hideLoading();
         showError("Failed to load PDF: " + (e.message || "Unknown error"));
         console.error("PDF load error:", e);
     }
+}
+
+// Load EPUB file
+async function loadEPUB(fileOrBlob, fileName = 'Document') {
+    try {
+        showLoading("Loading EPUB...");
+        const arrayBuffer = await fileOrBlob.arrayBuffer();
+
+        // Generate document hash
+        state.documentHash = await generateDocumentHash(arrayBuffer);
+        state.documentType = 'epub';
+        state.documentName = fileName;
+        state.pdfDoc = null;
+
+        // Initialize epub.js
+        state.epubBook = ePub(arrayBuffer);
+        await state.epubBook.ready;
+
+        // Get spine (chapter order)
+        const spine = state.epubBook.spine;
+
+        document.getElementById("pdf-placeholder").classList.add("hidden");
+        document.getElementById("pdf-container").classList.remove("hidden");
+
+        await renderEPUB();
+
+        // Save to library
+        await saveToLibrary(state.documentHash, fileName, 'epub', arrayBuffer);
+
+        localforage.setItem("cachedDocument", arrayBuffer);
+        localforage.setItem("cachedDocumentType", 'epub');
+        localforage.setItem("cachedDocumentName", fileName);
+    } catch (e) {
+        hideLoading();
+        showError("Failed to load EPUB: " + (e.message || "Unknown error"));
+        console.error("EPUB load error:", e);
+    }
+}
+
+// Render EPUB chapters
+async function renderEPUB() {
+    const container = document.getElementById("pdf-container");
+    container.innerHTML = "";
+    container.className = "pdf-container epub-container";
+    state.allLocations = [];
+    state.recentContext = [];
+    state.markerCluster.clearLayers();
+    state.allMarkers = [];
+
+    const spine = state.epubBook.spine;
+    let chapterNum = 0;
+    const totalChapters = spine.length;
+
+    for (const item of spine) {
+        chapterNum++;
+        updateLoading(`Chapter ${chapterNum}/${totalChapters}`);
+
+        try {
+            const doc = await item.load(state.epubBook.load.bind(state.epubBook));
+            const content = doc.body ? doc.body.innerHTML : doc.innerHTML || '';
+
+            // Create chapter wrapper
+            const chapterWrapper = document.createElement("div");
+            chapterWrapper.className = "epub-chapter";
+            chapterWrapper.dataset.chapter = chapterNum;
+
+            // Get chapter title from TOC if available
+            const tocItem = state.epubBook.navigation?.toc?.find(t => t.href?.includes(item.href));
+            if (tocItem) {
+                const titleEl = document.createElement("div");
+                titleEl.className = "epub-chapter-title";
+                titleEl.textContent = tocItem.label || `Chapter ${chapterNum}`;
+                chapterWrapper.appendChild(titleEl);
+            }
+
+            // Create content div
+            const contentDiv = document.createElement("div");
+            contentDiv.className = "epub-content";
+            contentDiv.innerHTML = content;
+
+            // Extract text for entity detection
+            const textContent = contentDiv.textContent || '';
+
+            chapterWrapper.appendChild(contentDiv);
+            container.appendChild(chapterWrapper);
+
+            // Extract entities from chapter text
+            const entities = extractEntitiesForPage(textContent);
+            entities.forEach(entity => {
+                // Find and highlight entities in the content
+                highlightEntityInEPUB(contentDiv, entity, chapterNum);
+            });
+
+        } catch (e) {
+            console.warn(`Failed to load chapter ${chapterNum}:`, e);
+        }
+    }
+
+    hideLoading();
+    updateTimeline();
+    document.getElementById("entityLegend").classList.remove("hidden");
+    document.getElementById("timelineControls").classList.remove("hidden");
+
+    if (state.allLocations.length === 0) {
+        showToast("No historical locations detected in this EPUB.", 'info', 5000);
+    } else {
+        showSuccess(`Found ${state.allLocations.length} location references`);
+    }
+}
+
+// Highlight entity in EPUB content
+function highlightEntityInEPUB(contentDiv, entity, chapterNum) {
+    const walker = document.createTreeWalker(contentDiv, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+
+    while (node = walker.nextNode()) {
+        const text = node.textContent;
+        const regex = new RegExp(`\\b${entity.text}\\b`, 'gi');
+        const match = regex.exec(text);
+
+        if (match) {
+            const span = document.createElement("span");
+            span.className = "location-badge epub-location" +
+                (entity.type === "region" ? " region-badge" : "") +
+                (entity.type === "event" ? " event-badge" : "");
+            span.dataset.location = entity.name;
+            span.dataset.entityType = entity.type;
+            span.textContent = match[0];
+            span.style.position = "relative";
+            span.style.display = "inline";
+            span.style.cursor = "pointer";
+            span.onclick = () => handleLocationClick(entity.name, span, entity.type, entity.locationName);
+
+            const before = text.substring(0, match.index);
+            const after = text.substring(match.index + match[0].length);
+
+            const parent = node.parentNode;
+            const beforeNode = document.createTextNode(before);
+            const afterNode = document.createTextNode(after);
+
+            parent.insertBefore(beforeNode, node);
+            parent.insertBefore(span, node);
+            parent.insertBefore(afterNode, node);
+            parent.removeChild(node);
+
+            // Add to locations
+            state.allLocations.push({
+                name: entity.name,
+                element: span,
+                page: chapterNum,
+                type: entity.type,
+                locationName: entity.locationName
+            });
+
+            // Add marker to map
+            const coords = entity.type === "event" && entity.locationName
+                ? (eventLocations[entity.locationName] || getContextualCoords(entity.locationName))
+                : getContextualCoords(entity.name);
+
+            if (coords) {
+                addToContext(entity.name, coords);
+                const marker = L.marker(coords).bindPopup(`<b>${entity.name}</b><br>Chapter ${chapterNum}`);
+                state.allMarkers.push(marker);
+                state.markerCluster.addLayer(marker);
+            }
+
+            break; // Only highlight first occurrence per entity per chapter
+        }
+    }
+}
+
+// Library management functions
+async function saveToLibrary(hash, name, type, arrayBuffer) {
+    const entry = {
+        hash,
+        name: name.replace(/\.(pdf|epub)$/i, ''),
+        type,
+        addedAt: Date.now(),
+        lastOpened: Date.now(),
+        size: arrayBuffer.byteLength
+    };
+
+    // Save metadata
+    const library = await libraryDB.getItem('metadata') || {};
+    library[hash] = entry;
+    await libraryDB.setItem('metadata', library);
+
+    // Save document data
+    await libraryDB.setItem(`doc_${hash}`, arrayBuffer);
+}
+
+async function loadLibrary() {
+    const grid = document.getElementById('libraryGrid');
+    const library = await libraryDB.getItem('metadata') || {};
+    const entries = Object.values(library).sort((a, b) => b.lastOpened - a.lastOpened);
+
+    if (entries.length === 0) {
+        grid.innerHTML = `
+            <div class="library-empty" style="grid-column: 1 / -1;">
+                <div class="library-empty-icon">📚</div>
+                <h3>Your library is empty</h3>
+                <p>Upload a PDF or EPUB to get started</p>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = entries.map(entry => `
+        <div class="library-item" data-hash="${entry.hash}">
+            <button class="library-item-delete" data-hash="${entry.hash}" title="Remove">✕</button>
+            <div class="library-item-icon">${entry.type === 'epub' ? '📖' : '📄'}</div>
+            <div class="library-item-title" title="${entry.name}">${entry.name}</div>
+            <div class="library-item-meta">${entry.type.toUpperCase()} • ${formatFileSize(entry.size)}</div>
+        </div>
+    `).join('');
+
+    // Add click handlers
+    grid.querySelectorAll('.library-item').forEach(item => {
+        item.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('library-item-delete')) return;
+            const hash = item.dataset.hash;
+            await openFromLibrary(hash);
+        });
+    });
+
+    grid.querySelectorAll('.library-item-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const hash = btn.dataset.hash;
+            await removeFromLibrary(hash);
+        });
+    });
+}
+
+async function openFromLibrary(hash) {
+    try {
+        const library = await libraryDB.getItem('metadata') || {};
+        const entry = library[hash];
+        if (!entry) {
+            showError("Document not found in library");
+            return;
+        }
+
+        const arrayBuffer = await libraryDB.getItem(`doc_${hash}`);
+        if (!arrayBuffer) {
+            showError("Document data not found");
+            return;
+        }
+
+        // Update last opened
+        entry.lastOpened = Date.now();
+        library[hash] = entry;
+        await libraryDB.setItem('metadata', library);
+
+        // Close library modal
+        toggleLibrary();
+
+        // Load document
+        const blob = new Blob([arrayBuffer], { type: entry.type === 'epub' ? 'application/epub+zip' : 'application/pdf' });
+        if (entry.type === 'epub') {
+            await loadEPUB(blob, entry.name);
+        } else {
+            await loadPDF(blob, entry.name);
+        }
+    } catch (e) {
+        showError("Failed to open document: " + e.message);
+    }
+}
+
+async function removeFromLibrary(hash) {
+    try {
+        const library = await libraryDB.getItem('metadata') || {};
+        delete library[hash];
+        await libraryDB.setItem('metadata', library);
+        await libraryDB.removeItem(`doc_${hash}`);
+        await loadLibrary();
+        showSuccess("Document removed from library");
+    } catch (e) {
+        showError("Failed to remove document");
+    }
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function toggleLibrary() {
+    state.libraryOpen = !state.libraryOpen;
+    document.getElementById('libraryModal').classList.toggle('open', state.libraryOpen);
+    if (state.libraryOpen) {
+        loadLibrary();
+    }
+    if (state.moreMenuOpen) toggleMoreMenu();
 }
 
 // Perform OCR on an image file and load as PDF
@@ -1609,11 +1927,21 @@ function downloadFile(content, filename, type) {
 document.getElementById("nav-upload").addEventListener("click", () => document.getElementById("pdf-input").click());
 document.getElementById("pdf-input").addEventListener("change", e => {
     const f = e.target.files?.[0];
-    if (f) f.type.startsWith("image/") ? performOCR(f) : loadPDF(f);
+    if (!f) return;
+    const fileName = f.name;
+    if (f.type.startsWith("image/")) {
+        performOCR(f);
+    } else if (fileName.toLowerCase().endsWith('.epub') || f.type === 'application/epub+zip') {
+        loadEPUB(f, fileName);
+    } else {
+        loadPDF(f, fileName);
+    }
 });
 document.getElementById("nav-map").addEventListener("click", toggleMap);
 document.getElementById("nav-more").addEventListener("click", toggleMoreMenu);
 // More menu items
+document.getElementById("menu-library")?.addEventListener("click", toggleLibrary);
+document.getElementById("library-close")?.addEventListener("click", toggleLibrary);
 document.getElementById("menu-test-pdf")?.addEventListener("click", () => { generateTestPDF(); toggleMoreMenu(); });
 document.getElementById("menu-ocr")?.addEventListener("click", () => { document.getElementById("ocr-input").click(); toggleMoreMenu(); });
 document.getElementById("menu-split-h")?.addEventListener("click", () => setViewMode('split-h'));
@@ -1712,7 +2040,18 @@ async function init() {
     initResizeHandle();
     setViewMode('split-h');
     feather.replace();
+
+    // Load cached document (PDF or EPUB)
     const cached = await localforage.getItem("cachedDocument");
-    if (cached) loadPDF(new Blob([cached], { type: "application/pdf" }));
+    const cachedType = await localforage.getItem("cachedDocumentType");
+    const cachedName = await localforage.getItem("cachedDocumentName") || 'Document';
+
+    if (cached) {
+        if (cachedType === 'epub') {
+            loadEPUB(new Blob([cached], { type: "application/epub+zip" }), cachedName);
+        } else {
+            loadPDF(new Blob([cached], { type: "application/pdf" }), cachedName);
+        }
+    }
 }
 init();
