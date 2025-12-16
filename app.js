@@ -40,43 +40,35 @@ const state = {
     overlayLayers: {} // Track active overlay layers
 };
 
-// Historian Overlay Layers - tile sources (improved with better data visibility)
+// Historian Overlay Layers - meaningful overlays that show specific features
 const overlayLayerDefs = {
     rivers: {
         name: "Rivers & Water",
-        layer: () => L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            maxZoom: 17,
-            opacity: 0.4,
-            attribution: '© OpenTopoMap',
-            className: 'overlay-rivers'
+        // Using OpenStreetMap with custom water-only styling via Overpass
+        layer: () => L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            opacity: 0.6,
+            attribution: '© OpenStreetMap',
+            className: 'overlay-rivers',
+            // This will show the base OSM which includes water features prominently
         })
     },
     population: {
-        name: "Population Density",
-        // Using Stamen Toner for better population/city visibility
-        layer: () => L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_toner_labels/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            opacity: 0.75,
-            attribution: '© Stadia Maps © Stamen Design',
-            className: 'overlay-population'
-        })
-    },
-    borders: {
-        name: "Borders & Labels",
-        // Better labels overlay from CartoDB
+        name: "Population & Cities",
+        // Using labels overlay to show cities and populated areas
         layer: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            opacity: 0.8,
+            opacity: 0.9,
             attribution: '© CartoDB',
-            className: 'overlay-borders'
+            className: 'overlay-population'
         })
     },
     terrain: {
         name: "Terrain & Elevation",
-        // Using USGS Shaded Relief for better terrain visibility
+        // Using shaded relief to show topography
         layer: () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 13,
-            opacity: 0.5,
+            opacity: 0.6,
             attribution: '© Esri',
             className: 'overlay-terrain'
         })
@@ -364,7 +356,7 @@ function changeMapStyle(style) {
     });
 }
 
-// Toggle overlay layers (rivers, population, borders, terrain) for both maps
+// Toggle overlay layers (rivers, population, terrain, geopolitical) for both maps
 function toggleOverlayLayer(layerName) {
     const btnMain = document.getElementById(`layer-${layerName}`);
     const btnInline = document.getElementById(`inline-layer-${layerName}`);
@@ -788,7 +780,7 @@ async function renderPage(pageNum) {
             }
         });
 
-        // Phase 3: highlight matches using Range API
+        // Phase 3: highlight matches using Range API with improved accuracy
         extractEntitiesForPage(fullText).forEach(entity => {
             for (const item of textItems) {
                 if (entity.index >= item.startIndex && entity.index < item.endIndex) {
@@ -802,25 +794,23 @@ async function renderPage(pageNum) {
                             range.setEnd(item.element.firstChild, localStart + localLen);
                             const rects = range.getClientRects();
                             for (const rect of rects) {
-                                const currentOverlayRect = textOverlay.getBoundingClientRect();
-                                const scaleNow = currentOverlayRect.width / viewport.width;
-                                const leftV = (rect.left - currentOverlayRect.left) / scaleNow;
-                                const topV = (rect.top - currentOverlayRect.top) / scaleNow;
-                                const wV = rect.width / scaleNow;
-                                const hV = rect.height / scaleNow;
+                                // Use viewport coordinates directly for better accuracy
+                                const canvasRect = canvas.getBoundingClientRect();
+                                const leftV = ((rect.left - canvasRect.left) / canvasRect.width) * viewport.width;
+                                const topV = ((rect.top - canvasRect.top) / canvasRect.height) * viewport.height;
+                                const wV = (rect.width / canvasRect.width) * viewport.width;
+                                const hV = (rect.height / canvasRect.height) * viewport.height;
+
                                 const hl = document.createElement("div");
                                 hl.className = "location-badge" + (entity.type === "region" ? " region-badge" : entity.type === "event" ? " event-badge" : "");
                                 hl.dataset.location = entity.name;
                                 hl.dataset.entityType = entity.type;
                                 if (entity.locationName) hl.dataset.eventLocation = entity.locationName;
+                                // Store viewport coordinates for accurate rescaling
                                 hl.dataset.leftV = leftV;
                                 hl.dataset.topV = topV;
                                 hl.dataset.widthV = wV;
                                 hl.dataset.heightV = hV;
-                                hl.dataset.left = (rect.left - currentOverlayRect.left);
-                                hl.dataset.top = (rect.top - currentOverlayRect.top);
-                                hl.dataset.width = rect.width;
-                                hl.dataset.height = rect.height;
                                 hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
                                 textOverlay.appendChild(hl);
                                 state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName });
@@ -849,7 +839,7 @@ async function renderPage(pageNum) {
     }
 }
 
-// Rescale overlays on page resize or view changes
+// Rescale overlays on page resize or view changes with improved accuracy
 function rescaleOverlays() {
     document.querySelectorAll(".pdf-page-wrapper").forEach(wrapper => {
         const canvas = wrapper.querySelector("canvas");
@@ -861,22 +851,18 @@ function rescaleOverlays() {
         overlay.style.width = canvas.clientWidth + "px";
         overlay.style.height = (vh * scale) + "px";
         if (canvas.parentElement) canvas.parentElement.style.height = (vh * scale) + "px";
+
+        // Rescale all location badges using viewport coordinates
         overlay.querySelectorAll(".location-badge").forEach(badge => {
-            const lV = badge.dataset.leftV;
-            const tV = badge.dataset.topV;
-            const wV = badge.dataset.widthV;
-            const hV = badge.dataset.heightV;
-            if (lV !== undefined && tV !== undefined && wV !== undefined && hV !== undefined) {
-                badge.style.left = (parseFloat(lV) * scale) + "px";
-                badge.style.top = (parseFloat(tV) * scale) + "px";
-                badge.style.width = (parseFloat(wV) * scale) + "px";
-                badge.style.height = (parseFloat(hV) * scale) + "px";
-            } else {
-                // fallback if viewport values missing
-                badge.style.left = ((+badge.dataset.left || 0) * scale) + "px";
-                badge.style.top = ((+badge.dataset.top || 0) * scale) + "px";
-                badge.style.width = ((+badge.dataset.width || 0) * scale) + "px";
-                badge.style.height = ((+badge.dataset.height || 0) * scale) + "px";
+            const lV = parseFloat(badge.dataset.leftV);
+            const tV = parseFloat(badge.dataset.topV);
+            const wV = parseFloat(badge.dataset.widthV);
+            const hV = parseFloat(badge.dataset.heightV);
+            if (!isNaN(lV) && !isNaN(tV) && !isNaN(wV) && !isNaN(hV)) {
+                badge.style.left = (lV * scale) + "px";
+                badge.style.top = (tV * scale) + "px";
+                badge.style.width = (wV * scale) + "px";
+                badge.style.height = (hV * scale) + "px";
             }
         });
     });
@@ -1160,13 +1146,11 @@ document.querySelectorAll('.map-style-btn').forEach(btn => {
 // Overlay layer toggles for panel map
 document.getElementById("layer-rivers")?.addEventListener("click", () => toggleOverlayLayer('rivers'));
 document.getElementById("layer-population")?.addEventListener("click", () => toggleOverlayLayer('population'));
-document.getElementById("layer-borders")?.addEventListener("click", () => toggleOverlayLayer('borders'));
 document.getElementById("layer-terrain")?.addEventListener("click", () => toggleOverlayLayer('terrain'));
 document.getElementById("layer-geopolitical")?.addEventListener("click", () => toggleOverlayLayer('geopolitical'));
 // Inline map overlay toggles
 document.getElementById("inline-layer-rivers")?.addEventListener("click", () => toggleOverlayLayer('rivers'));
 document.getElementById("inline-layer-population")?.addEventListener("click", () => toggleOverlayLayer('population'));
-document.getElementById("inline-layer-borders")?.addEventListener("click", () => toggleOverlayLayer('borders'));
 document.getElementById("inline-layer-terrain")?.addEventListener("click", () => toggleOverlayLayer('terrain'));
 document.getElementById("inline-layer-geopolitical")?.addEventListener("click", () => toggleOverlayLayer('geopolitical'));
 // Inline map style buttons
