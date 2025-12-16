@@ -791,45 +791,35 @@ async function renderPage(pageNum) {
             }
         });
 
-        // Phase 3: highlight matches using Range API with improved accuracy
+        // Phase 3: highlight matches using PDF position data directly for accurate positioning
         extractEntitiesForPage(fullText).forEach(entity => {
             for (const item of textItems) {
                 if (entity.index >= item.startIndex && entity.index < item.endIndex) {
                     const localStart = entity.index - item.startIndex;
                     const localLen = Math.min(entity.length, item.text.length - localStart);
                     if (localLen <= 0) continue;
-                    try {
-                        const range = document.createRange();
-                        if (item.element.firstChild) {
-                            range.setStart(item.element.firstChild, localStart);
-                            range.setEnd(item.element.firstChild, localStart + localLen);
-                            const rects = range.getClientRects();
-                            for (const rect of rects) {
-                                // Use viewport coordinates directly for better accuracy
-                                const canvasRect = canvas.getBoundingClientRect();
-                                const leftV = ((rect.left - canvasRect.left) / canvasRect.width) * viewport.width;
-                                const topV = ((rect.top - canvasRect.top) / canvasRect.height) * viewport.height;
-                                const wV = (rect.width / canvasRect.width) * viewport.width;
-                                const hV = (rect.height / canvasRect.height) * viewport.height;
 
-                                const hl = document.createElement("div");
-                                hl.className = "location-badge" + (entity.type === "region" ? " region-badge" : entity.type === "event" ? " event-badge" : "");
-                                hl.dataset.location = entity.name;
-                                hl.dataset.entityType = entity.type;
-                                if (entity.locationName) hl.dataset.eventLocation = entity.locationName;
-                                // Store viewport coordinates for accurate rescaling
-                                hl.dataset.leftV = leftV;
-                                hl.dataset.topV = topV;
-                                hl.dataset.widthV = wV;
-                                hl.dataset.heightV = hV;
-                                hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
-                                textOverlay.appendChild(hl);
-                                state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName });
-                            }
-                        }
-                    } catch (err) {
-                        console.warn("Range error", err);
-                    }
+                    // Calculate position using PDF coordinates directly instead of Range API
+                    // This avoids issues with font rendering and scaleX transforms
+                    const charRatio = item.text.length > 0 ? 1 / item.text.length : 1;
+                    const leftV = item.leftBase + (localStart * charRatio * item.textWidthPx);
+                    const topV = item.topBase;
+                    const wV = localLen * charRatio * item.textWidthPx;
+                    const hV = item.fontHeight;
+
+                    const hl = document.createElement("div");
+                    hl.className = "location-badge" + (entity.type === "region" ? " region-badge" : entity.type === "event" ? " event-badge" : "");
+                    hl.dataset.location = entity.name;
+                    hl.dataset.entityType = entity.type;
+                    if (entity.locationName) hl.dataset.eventLocation = entity.locationName;
+                    // Store viewport coordinates for accurate rescaling
+                    hl.dataset.leftV = leftV;
+                    hl.dataset.topV = topV;
+                    hl.dataset.widthV = wV;
+                    hl.dataset.heightV = hV;
+                    hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
+                    textOverlay.appendChild(hl);
+                    state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName });
 
                     let coords = entity.type === "event" && entity.locationName ? (eventLocations[entity.locationName] || getContextualCoords(entity.locationName)) : getContextualCoords(entity.name);
                     if (coords) {
