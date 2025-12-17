@@ -828,53 +828,303 @@ function disambiguateLocation(name, text, matchIndex) {
     return bestMatch;
 }
 
+// Escape special regex characters in a string
+function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Create flexible regex pattern for multi-word location names
+// Handles punctuation, line breaks, and variable whitespace
+function createFlexiblePattern(term) {
+    const escaped = escapeRegex(term);
+    // Replace spaces with flexible whitespace pattern that handles line breaks
+    const flexible = escaped.replace(/\s+/g, '[\\s\\-]+');
+    return new RegExp("\\b" + flexible + "\\b", "gi");
+}
+
+// Calculate confidence score for a match based on context
+function calculateConfidence(name, text, matchIndex, matchLength) {
+    const rules = disambiguationRules[name];
+
+    // If no disambiguation needed, high confidence
+    if (!rules) return 1.0;
+
+    // Get surrounding context (200 chars before and after)
+    const contextStart = Math.max(0, matchIndex - 200);
+    const contextEnd = Math.min(text.length, matchIndex + matchLength + 200);
+    const context = text.slice(contextStart, contextEnd).toLowerCase();
+
+    let bestScore = 0;
+    let totalKeywords = 0;
+
+    for (const rule of Object.values(rules)) {
+        const keywordCount = rule.keywords.length;
+        totalKeywords = Math.max(totalKeywords, keywordCount);
+        const matches = rule.keywords.filter(kw => context.includes(kw.toLowerCase())).length;
+        bestScore = Math.max(bestScore, matches);
+    }
+
+    // If we found contextual keywords, confidence is high
+    if (bestScore > 0) {
+        return Math.min(1.0, 0.5 + (bestScore / totalKeywords));
+    }
+
+    // Ambiguous location with no context clues = low confidence
+    return 0.3;
+}
+
 // Extract entities for a page of text with disambiguation
 function extractEntitiesForPage(text) {
-    const entities = [], found = new Set();
+    const entities = [];
+    const found = new Set();
+    const allMatches = [];
+
+    // Step 1: Find ALL potential matches with their lengths
     Object.entries(geoDatabase).forEach(([loc, entry]) => {
-        if (found.has(loc.toLowerCase()) || entry.type === "river") return;
+        if (entry.type === "river") return;
+
         const terms = [loc, ...(entry.aliases || [])];
         for (const term of terms) {
-            const regex = new RegExp("\\b" + term + "\\b", "gi");
-            const match = regex.exec(text);
-            if (match && !found.has(loc.toLowerCase())) {
-                found.add(loc.toLowerCase());
+            const regex = createFlexiblePattern(term);
+            let match;
 
-                // Check if disambiguation is needed
-                const disambiguation = disambiguateLocation(loc, text, match.index);
-                const entity = {
-                    text: match[0],
-                    type: entry.type === "region" ? "region" : "location",
+            // Find all occurrences of this term
+            while ((match = regex.exec(text)) !== null) {
+                allMatches.push({
                     name: loc,
+                    term: term,
+                    text: match[0],
                     index: match.index,
-                    length: match[0].length
-                };
-
-                // Add disambiguation info if found
-                if (disambiguation) {
-                    entity.disambiguatedRegion = disambiguation.region;
-                    entity.disambiguatedCoords = disambiguation.coords;
-                }
-
-                entities.push(entity);
-                break;
+                    length: match[0].length,
+                    type: entry.type === "region" ? "region" : "location",
+                    entry: entry
+                });
             }
         }
     });
-    [/Battle of ([A-Z][a-z]+)/gi, /Siege of ([A-Z][a-z]+)/gi, /Fall of ([A-Z][a-z]+)/gi, /Treaty of ([A-Z][a-z]+)/gi].forEach(pattern => {
+
+    // Step 2: Sort by length (longest first) to prioritize "Black Sea" over "Black"
+    allMatches.sort((a, b) => b.length - a.length);
+
+    // Step 3: Process matches, skipping overlaps (longest-match wins)
+    const usedRanges = [];
+
+    for (const match of allMatches) {
+        const matchEnd = match.index + match.length;
+
+        // Check if this match overlaps with any already-used range
+        const overlaps = usedRanges.some(([start, end]) => {
+            return (match.index >= start && match.index < end) ||
+                   (matchEnd > start && matchEnd <= end) ||
+                   (match.index <= start && matchEnd >= end);
+        });
+
+        if (overlaps) continue;
+
+        // Check if we already found this location (by canonical name)
+        const foundKey = match.name.toLowerCase();
+        if (found.has(foundKey)) continue;
+
+        found.add(foundKey);
+        usedRanges.push([match.index, matchEnd]);
+
+        // Calculate confidence score
+        const confidence = calculateConfidence(match.name, text, match.index, match.length);
+
+        // Check if disambiguation is needed
+        const disambiguation = disambiguateLocation(match.name, text, match.index);
+
+        const entity = {
+            text: match.text,
+            type: match.type,
+            name: match.name,
+            index: match.index,
+            length: match.length,
+            confidence: confidence
+        };
+
+        // Add disambiguation info if found
+        if (disambiguation) {
+            entity.disambiguatedRegion = disambiguation.region;
+            entity.disambiguatedCoords = disambiguation.coords;
+        }
+
+        // Flag low-confidence matches for UI attention
+        if (confidence < 0.5) {
+            entity.needsReview = true;
+            entity.ambiguousOptions = disambiguationRules[match.name];
+        }
+
+        entities.push(entity);
+    }
+
+    // Step 4: Extract event patterns (Battle of X, Siege of Y, etc.)
+    [/Battle of ([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/gi,
+     /Siege of ([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/gi,
+     /Fall of ([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/gi,
+     /Treaty of ([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/gi].forEach(pattern => {
         let m;
         while ((m = pattern.exec(text)) !== null) {
-            if (!found.has(m[0].toLowerCase())) {
-                found.add(m[0].toLowerCase());
-                entities.push({ text: m[0], type: "event", name: m[0], locationName: m[1], index: m.index, length: m[0].length });
+            const eventKey = m[0].toLowerCase();
+            if (!found.has(eventKey)) {
+                found.add(eventKey);
+                entities.push({
+                    text: m[0],
+                    type: "event",
+                    name: m[0],
+                    locationName: m[1],
+                    index: m.index,
+                    length: m[0].length,
+                    confidence: 0.9 // Events are usually high confidence
+                });
             }
         }
     });
+
+    // Step 5: Sort by index (document order)
+    entities.sort((a, b) => a.index - b.index);
+
     return entities;
 }
 
+// Show disambiguation UI for ambiguous locations
+function showDisambiguationUI(entity, element, pageNum) {
+    // Check if we already have a remembered choice for this document
+    const docKey = state.currentDocPath || 'default';
+    if (!state.disambiguationChoices) state.disambiguationChoices = {};
+    if (!state.disambiguationChoices[docKey]) state.disambiguationChoices[docKey] = {};
+
+    const remembered = state.disambiguationChoices[docKey][entity.name];
+    if (remembered) {
+        // Use remembered choice
+        handleLocationClick(entity.name, element, entity.type, null, remembered.coords);
+        return;
+    }
+
+    // Create modal overlay
+    const modal = document.createElement("div");
+    modal.className = "disambiguation-modal";
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    `;
+
+    const dialog = document.createElement("div");
+    dialog.style.cssText = `
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 400px;
+        color: #e2e8f0;
+    `;
+
+    const title = document.createElement("h3");
+    title.textContent = `Which "${entity.name}" do you mean?`;
+    title.style.cssText = "margin: 0 0 15px 0; font-size: 18px; color: #f1f5f9;";
+
+    const subtitle = document.createElement("p");
+    subtitle.textContent = `This location is ambiguous. Please select:`;
+    subtitle.style.cssText = "margin: 0 0 15px 0; font-size: 14px; color: #94a3b8;";
+
+    dialog.appendChild(title);
+    dialog.appendChild(subtitle);
+
+    // Create option buttons
+    Object.entries(entity.ambiguousOptions).forEach(([region, rule]) => {
+        const btn = document.createElement("button");
+        btn.textContent = `${entity.name}, ${region.charAt(0).toUpperCase() + region.slice(1)}`;
+        btn.style.cssText = `
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background: #334155;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            color: #e2e8f0;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: left;
+            transition: all 0.2s;
+        `;
+
+        btn.onmouseover = () => {
+            btn.style.background = "#475569";
+            btn.style.borderColor = "#64748b";
+        };
+        btn.onmouseout = () => {
+            btn.style.background = "#334155";
+            btn.style.borderColor = "#475569";
+        };
+
+        btn.onclick = () => {
+            // Remember this choice for the document
+            state.disambiguationChoices[docKey][entity.name] = {
+                region: region,
+                coords: rule.coords
+            };
+
+            // Update the badge
+            element.classList.remove("low-confidence");
+            element.dataset.needsReview = "false";
+            element.title = `${entity.name} (${region})`;
+            element.onclick = () => handleLocationClick(entity.name, element, entity.type, null, rule.coords);
+
+            // Update in state.allLocations
+            const locIdx = state.allLocations.findIndex(loc => loc.element === element);
+            if (locIdx !== -1) {
+                state.allLocations[locIdx].disambiguatedCoords = rule.coords;
+                state.allLocations[locIdx].needsReview = false;
+            }
+
+            // Navigate to location
+            handleLocationClick(entity.name, element, entity.type, null, rule.coords);
+
+            // Close modal
+            document.body.removeChild(modal);
+        };
+
+        dialog.appendChild(btn);
+    });
+
+    // Cancel button
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.style.cssText = `
+        display: block;
+        width: 100%;
+        padding: 10px;
+        margin-top: 15px;
+        background: transparent;
+        border: 1px solid #475569;
+        border-radius: 6px;
+        color: #94a3b8;
+        cursor: pointer;
+        font-size: 14px;
+    `;
+    cancelBtn.onclick = () => document.body.removeChild(modal);
+
+    dialog.appendChild(cancelBtn);
+    modal.appendChild(dialog);
+    document.body.appendChild(modal);
+
+    // Close on overlay click
+    modal.onclick = (e) => {
+        if (e.target === modal) document.body.removeChild(modal);
+    };
+}
+
 // Handle clicking on a location badge
-function handleLocationClick(name, element, type = "location", eventLoc = null) {
+function handleLocationClick(name, element, type = "location", eventLoc = null, forcedCoords = null) {
     document.querySelectorAll(".location-badge").forEach(el => el.classList.remove("active"));
     element.classList.add("active");
     const idx = state.allLocations.findIndex(loc => loc.element === element);
@@ -909,7 +1159,7 @@ function handleLocationClick(name, element, type = "location", eventLoc = null) 
             dashArray: "5, 5"
         });
     });
-    let coords = type === "event" && eventLoc ? (eventLocations[eventLoc] || getContextualCoords(eventLoc)) : getContextualCoords(name);
+    let coords = forcedCoords || (type === "event" && eventLoc ? (eventLocations[eventLoc] || getContextualCoords(eventLoc)) : getContextualCoords(name));
     const entry = geoDatabase[name];
     if (entry?.type === "region" && entry.coords && Array.isArray(entry.coords[0])) {
         const poly = state.regionPolygons.find(p => p.regionName === name);
@@ -1254,17 +1504,47 @@ async function renderPage(pageNum) {
 
                     const hl = document.createElement("div");
                     hl.className = "location-badge" + (entity.type === "region" ? " region-badge" : entity.type === "event" ? " event-badge" : "");
+
+                    // Add low-confidence indicator
+                    if (entity.needsReview && entity.confidence < 0.5) {
+                        hl.className += " low-confidence";
+                        hl.title = `Ambiguous location (confidence: ${Math.round(entity.confidence * 100)}%). Click to clarify.`;
+                    }
+
                     hl.dataset.location = entity.name;
                     hl.dataset.entityType = entity.type;
+                    hl.dataset.confidence = entity.confidence || 1.0;
                     if (entity.locationName) hl.dataset.eventLocation = entity.locationName;
+                    if (entity.needsReview) hl.dataset.needsReview = "true";
+
                     // Store viewport coordinates for accurate rescaling
                     hl.dataset.leftV = leftV;
                     hl.dataset.topV = topV;
                     hl.dataset.widthV = wV;
                     hl.dataset.heightV = hV;
-                    hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
+
+                    // Handle click - show disambiguation UI if needed
+                    if (entity.needsReview) {
+                        hl.onclick = (e) => {
+                            e.stopPropagation();
+                            showDisambiguationUI(entity, hl, pageNum);
+                        };
+                    } else {
+                        hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
+                    }
+
                     textOverlay.appendChild(hl);
-                    state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName, disambiguatedCoords: entity.disambiguatedCoords });
+                    state.allLocations.push({
+                        name: entity.name,
+                        element: hl,
+                        page: pageNum,
+                        type: entity.type,
+                        locationName: entity.locationName,
+                        disambiguatedCoords: entity.disambiguatedCoords,
+                        confidence: entity.confidence,
+                        needsReview: entity.needsReview,
+                        ambiguousOptions: entity.ambiguousOptions
+                    });
 
                     // Use disambiguated coordinates if available, otherwise fall back to default
                     let coords = entity.disambiguatedCoords ||
