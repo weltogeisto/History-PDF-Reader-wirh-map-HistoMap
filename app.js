@@ -886,6 +886,7 @@ const disambiguationRules = {
 };
 
 // Disambiguate location based on surrounding text context
+// Returns: { region, coords, confidence, allOptions } or null
 function disambiguateLocation(name, text, matchIndex) {
     const rules = disambiguationRules[name];
     if (!rules) return null;
@@ -895,18 +896,56 @@ function disambiguateLocation(name, text, matchIndex) {
     const contextEnd = Math.min(text.length, matchIndex + name.length + 200);
     const context = text.slice(contextStart, contextEnd).toLowerCase();
 
-    let bestMatch = null;
-    let bestScore = 0;
-
+    // Score all options
+    const options = [];
     for (const [region, rule] of Object.entries(rules)) {
         const score = rule.keywords.filter(kw => context.includes(kw.toLowerCase())).length;
-        if (score > bestScore) {
-            bestScore = score;
-            bestMatch = { region, coords: rule.coords };
-        }
+        options.push({
+            region,
+            coords: rule.coords,
+            score,
+            keywords: rule.keywords,
+            label: getDisambiguationLabel(name, region)
+        });
     }
 
-    return bestMatch;
+    // Sort by score descending
+    options.sort((a, b) => b.score - a.score);
+
+    const bestMatch = options[0];
+    const hasConfidentMatch = bestMatch.score >= 2; // Need at least 2 keyword matches for confidence
+    const hasTie = options.length > 1 && options[1].score === bestMatch.score;
+
+    return {
+        region: bestMatch.region,
+        coords: bestMatch.coords,
+        confidence: hasConfidentMatch && !hasTie ? 'high' : 'low',
+        allOptions: options,
+        needsUserInput: !hasConfidentMatch || hasTie
+    };
+}
+
+// Get human-readable label for disambiguation option
+function getDisambiguationLabel(name, region) {
+    const labels = {
+        "Georgia": {
+            caucasus: "Georgia (Caucasus region)",
+            us: "Georgia (US state)"
+        },
+        "Alexandria": {
+            egypt: "Alexandria, Egypt",
+            virginia: "Alexandria, Virginia"
+        },
+        "Memphis": {
+            egypt: "Memphis, Egypt (ancient)",
+            us: "Memphis, Tennessee"
+        },
+        "Tripoli": {
+            libya: "Tripoli, Libya",
+            lebanon: "Tripoli, Lebanon"
+        }
+    };
+    return labels[name]?.[region] || `${name} (${region})`;
 }
 
 // Escape special regex characters
@@ -996,6 +1035,9 @@ function extractEntitiesForPage(text) {
             if (disambiguation) {
                 entity.disambiguatedRegion = disambiguation.region;
                 entity.disambiguatedCoords = disambiguation.coords;
+                entity.disambiguationConfidence = disambiguation.confidence;
+                entity.disambiguationOptions = disambiguation.allOptions;
+                entity.needsUserInput = disambiguation.needsUserInput;
             }
 
             entities.push(entity);
@@ -1007,6 +1049,84 @@ function extractEntitiesForPage(text) {
     entities.sort((a, b) => a.index - b.index);
 
     return entities;
+}
+
+// Show disambiguation modal for ambiguous locations
+function showDisambiguationModal(locationName, entity, badgeElement) {
+    const modal = document.getElementById('disambiguationModal');
+    const question = document.getElementById('disambiguationQuestion');
+    const optionsContainer = document.getElementById('disambiguationOptions');
+
+    // Set question text
+    question.textContent = `We found "${locationName}" in your document, but it could refer to multiple places. Which one did you mean?`;
+
+    // Clear previous options
+    optionsContainer.innerHTML = '';
+
+    // Create option buttons
+    entity.disambiguationOptions.forEach((option, index) => {
+        const optionBtn = document.createElement('button');
+        optionBtn.className = 'disambiguation-option';
+
+        const label = document.createElement('div');
+        label.className = 'option-label';
+        label.textContent = option.label;
+
+        const keywords = document.createElement('div');
+        keywords.className = 'option-keywords';
+        keywords.textContent = `Context keywords: ${option.keywords.join(', ')}`;
+
+        optionBtn.appendChild(label);
+        optionBtn.appendChild(keywords);
+
+        // Click handler for option selection
+        optionBtn.onclick = () => {
+            selectDisambiguationOption(locationName, option, badgeElement, entity);
+            closeDisambiguationModal();
+        };
+
+        optionsContainer.appendChild(optionBtn);
+    });
+
+    // Show modal
+    modal.classList.add('open');
+    state.disambiguationModalOpen = true;
+}
+
+// Close disambiguation modal
+function closeDisambiguationModal() {
+    const modal = document.getElementById('disambiguationModal');
+    modal.classList.remove('open');
+    state.disambiguationModalOpen = false;
+}
+
+// Select a disambiguation option and remember it
+function selectDisambiguationOption(locationName, option, badgeElement, entity) {
+    // Save user choice to localStorage (scoped to current document)
+    const docHash = state.documentName || 'default';
+    const storageKey = `disambiguation_${docHash}`;
+    const choices = JSON.parse(localStorage.getItem(storageKey) || '{}');
+    choices[locationName] = option.region;
+    localStorage.setItem(storageKey, JSON.stringify(choices));
+
+    // Update entity with selected coordinates
+    entity.disambiguatedCoords = option.coords;
+    entity.disambiguatedRegion = option.region;
+
+    // Remove low-confidence indicator from badge
+    badgeElement.classList.remove('low-confidence');
+
+    // Update stored location data
+    const locationData = state.allLocations.find(loc => loc.element === badgeElement);
+    if (locationData) {
+        locationData.disambiguatedCoords = option.coords;
+    }
+
+    // Navigate to selected location
+    handleLocationClick(locationName, badgeElement, entity.type, entity.locationName);
+
+    // Show success message
+    showToast(`Location set to: ${option.label}`, 'info', 2000);
 }
 
 // Handle clicking on a location badge
@@ -1390,15 +1510,37 @@ async function renderPage(pageNum) {
 
                     const hl = document.createElement("div");
                     hl.className = "location-badge" + (entity.type === "region" ? " region-badge" : entity.type === "event" ? " event-badge" : "");
+
+                    // Add low-confidence indicator if disambiguation confidence is low
+                    if (entity.disambiguationConfidence === 'low') {
+                        hl.classList.add('low-confidence');
+                    }
+
                     hl.dataset.location = entity.name;
                     hl.dataset.entityType = entity.type;
                     if (entity.locationName) hl.dataset.eventLocation = entity.locationName;
+
+                    // Store disambiguation data for click handler
+                    if (entity.disambiguationOptions) {
+                        hl.dataset.disambiguationOptions = JSON.stringify(entity.disambiguationOptions);
+                        hl.dataset.needsUserInput = entity.needsUserInput;
+                    }
+
                     // Store viewport coordinates for accurate rescaling
                     hl.dataset.leftV = leftV;
                     hl.dataset.topV = topV;
                     hl.dataset.widthV = wV;
                     hl.dataset.heightV = hV;
-                    hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
+
+                    // Click handler - show disambiguation UI if needed, otherwise navigate map
+                    hl.onclick = () => {
+                        if (entity.needsUserInput && entity.disambiguationOptions) {
+                            showDisambiguationModal(entity.name, entity, hl);
+                        } else {
+                            handleLocationClick(entity.name, hl, entity.type, entity.locationName);
+                        }
+                    };
+
                     textOverlay.appendChild(hl);
                     state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName, disambiguatedCoords: entity.disambiguatedCoords });
 
@@ -2166,6 +2308,8 @@ document.getElementById("export-geojson")?.addEventListener("click", exportGeoJS
 document.getElementById("export-kml")?.addEventListener("click", exportKML);
 document.getElementById("export-csv")?.addEventListener("click", exportCSV);
 document.getElementById("close-export-modal")?.addEventListener("click", toggleExportModal);
+// Disambiguation modal close button
+document.getElementById("close-disambiguation-modal")?.addEventListener("click", closeDisambiguationModal);
 // Auto Map toggle (header button)
 document.getElementById("auto-map-toggle")?.addEventListener("click", toggleAutoMap);
 // Mobile menu: Auto Map toggle
