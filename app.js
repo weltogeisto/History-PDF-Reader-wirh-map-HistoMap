@@ -828,48 +828,103 @@ function disambiguateLocation(name, text, matchIndex) {
     return bestMatch;
 }
 
-// Extract entities for a page of text with disambiguation
-function extractEntitiesForPage(text) {
-    const entities = [], found = new Set();
-    Object.entries(geoDatabase).forEach(([loc, entry]) => {
-        if (found.has(loc.toLowerCase()) || entry.type === "river") return;
-        const terms = [loc, ...(entry.aliases || [])];
-        for (const term of terms) {
-            const regex = new RegExp("\\b" + term + "\\b", "gi");
-            const match = regex.exec(text);
-            if (match && !found.has(loc.toLowerCase())) {
-                found.add(loc.toLowerCase());
+// Escape special regex characters
+function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-                // Check if disambiguation is needed
-                const disambiguation = disambiguateLocation(loc, text, match.index);
-                const entity = {
+// Build flexible regex for multi-word terms (handles whitespace, hyphens, line breaks)
+function buildFlexibleRegex(term) {
+    const escaped = escapeRegex(term);
+    // Replace spaces with flexible whitespace pattern (handles spaces, hyphens, line breaks)
+    const flexible = escaped.replace(/\s+/g, '[\\s\\-]+');
+    return new RegExp("\\b" + flexible + "\\b", "gi");
+}
+
+// Extract entities for a page of text with disambiguation
+// Implements longest-match preference and proper regex escaping
+function extractEntitiesForPage(text) {
+    const candidateMatches = [];
+
+    // Step 1: Find ALL possible matches from geoDatabase
+    Object.entries(geoDatabase).forEach(([loc, entry]) => {
+        if (entry.type === "river") return;
+        const terms = [loc, ...(entry.aliases || [])];
+
+        for (const term of terms) {
+            const regex = buildFlexibleRegex(term);
+            let match;
+            regex.lastIndex = 0; // Reset regex state
+
+            while ((match = regex.exec(text)) !== null) {
+                candidateMatches.push({
                     text: match[0],
                     type: entry.type === "region" ? "region" : "location",
                     name: loc,
                     index: match.index,
-                    length: match[0].length
-                };
-
-                // Add disambiguation info if found
-                if (disambiguation) {
-                    entity.disambiguatedRegion = disambiguation.region;
-                    entity.disambiguatedCoords = disambiguation.coords;
-                }
-
-                entities.push(entity);
-                break;
+                    length: match[0].length,
+                    matchedTerm: term
+                });
             }
         }
     });
+
+    // Step 2: Find event-based matches (Battle of, Siege of, etc.)
     [/Battle of ([A-Z][a-z]+)/gi, /Siege of ([A-Z][a-z]+)/gi, /Fall of ([A-Z][a-z]+)/gi, /Treaty of ([A-Z][a-z]+)/gi].forEach(pattern => {
         let m;
+        pattern.lastIndex = 0; // Reset regex state
         while ((m = pattern.exec(text)) !== null) {
-            if (!found.has(m[0].toLowerCase())) {
-                found.add(m[0].toLowerCase());
-                entities.push({ text: m[0], type: "event", name: m[0], locationName: m[1], index: m.index, length: m[0].length });
-            }
+            candidateMatches.push({
+                text: m[0],
+                type: "event",
+                name: m[0],
+                locationName: m[1],
+                index: m.index,
+                length: m[0].length
+            });
         }
     });
+
+    // Step 3: Sort by longest match first, then by position
+    candidateMatches.sort((a, b) => {
+        if (b.length !== a.length) return b.length - a.length; // Longest first
+        return a.index - b.index; // Earlier position if same length
+    });
+
+    // Step 4: Filter out overlapping matches (keep only longest, non-overlapping)
+    const entities = [];
+    const usedRanges = [];
+
+    for (const candidate of candidateMatches) {
+        const start = candidate.index;
+        const end = candidate.index + candidate.length;
+
+        // Check if this range overlaps with any already used range
+        const overlaps = usedRanges.some(range =>
+            (start >= range.start && start < range.end) ||
+            (end > range.start && end <= range.end) ||
+            (start <= range.start && end >= range.end)
+        );
+
+        if (!overlaps) {
+            // Check if disambiguation is needed
+            const disambiguation = disambiguateLocation(candidate.name, text, candidate.index);
+            const entity = { ...candidate };
+
+            // Add disambiguation info if found
+            if (disambiguation) {
+                entity.disambiguatedRegion = disambiguation.region;
+                entity.disambiguatedCoords = disambiguation.coords;
+            }
+
+            entities.push(entity);
+            usedRanges.push({ start, end });
+        }
+    }
+
+    // Step 5: Sort final entities by position for rendering
+    entities.sort((a, b) => a.index - b.index);
+
     return entities;
 }
 
@@ -1549,7 +1604,8 @@ function highlightEntityInEPUB(contentDiv, entity, chapterNum) {
 
     while (node = walker.nextNode()) {
         const text = node.textContent;
-        const regex = new RegExp(`\\b${entity.text}\\b`, 'gi');
+        const escapedText = escapeRegex(entity.text);
+        const regex = new RegExp(`\\b${escapedText}\\b`, 'gi');
         const match = regex.exec(text);
 
         if (match) {
