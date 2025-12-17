@@ -434,11 +434,24 @@ function addToContext(name, coords) {
     if (state.recentContext.length > 5) state.recentContext.shift();
 }
 
-// Map base tile definitions
+// Map base tile definitions with proper attribution
 const mapTiles = {
-    modern: { url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", attr: "© OpenStreetMap" },
-    topo: { url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", attr: "© OpenTopoMap" },
-    satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr: "© Esri" }
+    modern: {
+        url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attr: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        name: "OpenStreetMap"
+    },
+    topo: {
+        url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+        attr: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
+        name: "OpenTopoMap",
+        fallbackStyle: "modern" // Fallback to OSM if OpenTopoMap fails (backup mode after Jan 2026)
+    },
+    satellite: {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+        name: "Esri World Imagery"
+    }
 };
 
 // Render region polygons to a map and track them (hidden until document loaded)
@@ -553,12 +566,64 @@ function handleRegionClick(regionName, polygon) {
     }
 }
 
-// Initialize the main map with clustering and base layer tracking
+// Initialize the main map with clustering, layer control, and base layer tracking
 function initMap() {
-    state.map = L.map("map", { zoomControl: false }).setView([45, 30], 4);
+    state.map = L.map("map", { zoomControl: false, attributionControl: true }).setView([45, 30], 4);
     L.control.zoom({ position: 'topright' }).addTo(state.map);
-    // Set initial base layer and track it for style changes
-    state.currentTileLayer = L.tileLayer(mapTiles.modern.url, { maxZoom: 18, attribution: mapTiles.modern.attr }).addTo(state.map);
+
+    // Create base layer objects for layer control
+    const baseLayers = {};
+    Object.keys(mapTiles).forEach(key => {
+        const tileConfig = mapTiles[key];
+        const layer = L.tileLayer(tileConfig.url, {
+            maxZoom: 18,
+            attribution: tileConfig.attr,
+            errorTileUrl: '', // Prevent broken image icons
+        });
+
+        // Add tile error handler with fallback for OpenTopoMap
+        if (tileConfig.fallbackStyle) {
+            layer.on('tileerror', function(error) {
+                console.warn(`Tile loading failed for ${tileConfig.name}, consider switching to fallback`);
+                // Show user-friendly message about tile loading issues
+                if (!state.tileErrorShown) {
+                    state.tileErrorShown = true;
+                    showToast(`${tileConfig.name} tiles may be unavailable. Try switching to ${mapTiles[tileConfig.fallbackStyle].name}.`, 'warning');
+                }
+            });
+        }
+
+        baseLayers[tileConfig.name] = layer;
+    });
+
+    // Set initial base layer (OpenStreetMap)
+    state.currentTileLayer = baseLayers["OpenStreetMap"];
+    state.currentTileLayer.addTo(state.map);
+
+    // Add layer control (top-right, below zoom control)
+    const layerControl = L.control.layers(baseLayers, null, {
+        position: 'topright',
+        collapsed: true
+    }).addTo(state.map);
+
+    // Store layer control reference for potential updates
+    state.layerControl = layerControl;
+    state.baseLayers = baseLayers;
+
+    // Sync layer control with button-based style changes
+    state.map.on('baselayerchange', function(e) {
+        // Update current tile layer reference
+        state.currentTileLayer = e.layer;
+
+        // Update button active states to match layer control
+        const styleKey = Object.keys(mapTiles).find(key => mapTiles[key].name === e.name);
+        if (styleKey) {
+            document.querySelectorAll('.map-style-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.style === styleKey);
+            });
+        }
+    });
+
     // Use marker clustering
     state.markerCluster = L.markerClusterGroup({
         chunkedLoading: true,
@@ -580,19 +645,35 @@ function toggleMap() {
 // Change the base tile style for both panel and inline maps
 function changeMapStyle(style) {
     const tile = mapTiles[style] || mapTiles.modern;
-    // Update main map base layer
-    if (state.currentTileLayer && state.map) {
-        state.map.removeLayer(state.currentTileLayer);
+
+    // Update main map base layer (sync with layer control if available)
+    if (state.map) {
+        if (state.baseLayers && state.baseLayers[tile.name]) {
+            // Use pre-created layer from layer control
+            if (state.currentTileLayer && state.map.hasLayer(state.currentTileLayer)) {
+                state.map.removeLayer(state.currentTileLayer);
+            }
+            state.currentTileLayer = state.baseLayers[tile.name];
+            state.currentTileLayer.addTo(state.map);
+        } else {
+            // Fallback to creating new layer (for backward compatibility)
+            if (state.currentTileLayer && state.map.hasLayer(state.currentTileLayer)) {
+                state.map.removeLayer(state.currentTileLayer);
+            }
+            state.currentTileLayer = L.tileLayer(tile.url, { maxZoom: 18, attribution: tile.attr });
+            state.currentTileLayer.addTo(state.map);
+        }
     }
-    state.currentTileLayer = L.tileLayer(tile.url, { maxZoom: 18, attribution: tile.attr });
-    if (state.map) state.currentTileLayer.addTo(state.map);
+
     // Update inline map base layer
-    if (state.inlineTileLayer && state.inlineMap) {
-        state.inlineMap.removeLayer(state.inlineTileLayer);
-    }
     if (state.inlineMap) {
-        state.inlineTileLayer = L.tileLayer(tile.url, { maxZoom: 18, attribution: tile.attr }).addTo(state.inlineMap);
+        if (state.inlineTileLayer && state.inlineMap.hasLayer(state.inlineTileLayer)) {
+            state.inlineMap.removeLayer(state.inlineTileLayer);
+        }
+        state.inlineTileLayer = L.tileLayer(tile.url, { maxZoom: 18, attribution: tile.attr });
+        state.inlineTileLayer.addTo(state.inlineMap);
     }
+
     // Update button active states
     document.querySelectorAll('.map-style-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.style === style);
