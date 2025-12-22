@@ -434,11 +434,24 @@ function addToContext(name, coords) {
     if (state.recentContext.length > 5) state.recentContext.shift();
 }
 
-// Map base tile definitions
+// Map base tile definitions with proper attribution
 const mapTiles = {
-    modern: { url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", attr: "© OpenStreetMap" },
-    topo: { url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", attr: "© OpenTopoMap" },
-    satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr: "© Esri" }
+    modern: {
+        url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attr: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        name: "OpenStreetMap"
+    },
+    topo: {
+        url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+        attr: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
+        name: "OpenTopoMap",
+        fallbackStyle: "modern" // Fallback to OSM if OpenTopoMap fails (backup mode after Jan 2026)
+    },
+    satellite: {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+        name: "Esri World Imagery"
+    }
 };
 
 // Render region polygons to a map and track them (hidden until document loaded)
@@ -553,12 +566,64 @@ function handleRegionClick(regionName, polygon) {
     }
 }
 
-// Initialize the main map with clustering and base layer tracking
+// Initialize the main map with clustering, layer control, and base layer tracking
 function initMap() {
-    state.map = L.map("map", { zoomControl: false }).setView([45, 30], 4);
+    state.map = L.map("map", { zoomControl: false, attributionControl: true }).setView([45, 30], 4);
     L.control.zoom({ position: 'topright' }).addTo(state.map);
-    // Set initial base layer and track it for style changes
-    state.currentTileLayer = L.tileLayer(mapTiles.modern.url, { maxZoom: 18, attribution: mapTiles.modern.attr }).addTo(state.map);
+
+    // Create base layer objects for layer control
+    const baseLayers = {};
+    Object.keys(mapTiles).forEach(key => {
+        const tileConfig = mapTiles[key];
+        const layer = L.tileLayer(tileConfig.url, {
+            maxZoom: 18,
+            attribution: tileConfig.attr,
+            errorTileUrl: '', // Prevent broken image icons
+        });
+
+        // Add tile error handler with fallback for OpenTopoMap
+        if (tileConfig.fallbackStyle) {
+            layer.on('tileerror', function(error) {
+                console.warn(`Tile loading failed for ${tileConfig.name}, consider switching to fallback`);
+                // Show user-friendly message about tile loading issues
+                if (!state.tileErrorShown) {
+                    state.tileErrorShown = true;
+                    showToast(`${tileConfig.name} tiles may be unavailable. Try switching to ${mapTiles[tileConfig.fallbackStyle].name}.`, 'warning');
+                }
+            });
+        }
+
+        baseLayers[tileConfig.name] = layer;
+    });
+
+    // Set initial base layer (OpenStreetMap)
+    state.currentTileLayer = baseLayers["OpenStreetMap"];
+    state.currentTileLayer.addTo(state.map);
+
+    // Add layer control (top-right, below zoom control)
+    const layerControl = L.control.layers(baseLayers, null, {
+        position: 'topright',
+        collapsed: true
+    }).addTo(state.map);
+
+    // Store layer control reference for potential updates
+    state.layerControl = layerControl;
+    state.baseLayers = baseLayers;
+
+    // Sync layer control with button-based style changes
+    state.map.on('baselayerchange', function(e) {
+        // Update current tile layer reference
+        state.currentTileLayer = e.layer;
+
+        // Update button active states to match layer control
+        const styleKey = Object.keys(mapTiles).find(key => mapTiles[key].name === e.name);
+        if (styleKey) {
+            document.querySelectorAll('.map-style-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.style === styleKey);
+            });
+        }
+    });
+
     // Use marker clustering
     state.markerCluster = L.markerClusterGroup({
         chunkedLoading: true,
@@ -580,19 +645,35 @@ function toggleMap() {
 // Change the base tile style for both panel and inline maps
 function changeMapStyle(style) {
     const tile = mapTiles[style] || mapTiles.modern;
-    // Update main map base layer
-    if (state.currentTileLayer && state.map) {
-        state.map.removeLayer(state.currentTileLayer);
+
+    // Update main map base layer (sync with layer control if available)
+    if (state.map) {
+        if (state.baseLayers && state.baseLayers[tile.name]) {
+            // Use pre-created layer from layer control
+            if (state.currentTileLayer && state.map.hasLayer(state.currentTileLayer)) {
+                state.map.removeLayer(state.currentTileLayer);
+            }
+            state.currentTileLayer = state.baseLayers[tile.name];
+            state.currentTileLayer.addTo(state.map);
+        } else {
+            // Fallback to creating new layer (for backward compatibility)
+            if (state.currentTileLayer && state.map.hasLayer(state.currentTileLayer)) {
+                state.map.removeLayer(state.currentTileLayer);
+            }
+            state.currentTileLayer = L.tileLayer(tile.url, { maxZoom: 18, attribution: tile.attr });
+            state.currentTileLayer.addTo(state.map);
+        }
     }
-    state.currentTileLayer = L.tileLayer(tile.url, { maxZoom: 18, attribution: tile.attr });
-    if (state.map) state.currentTileLayer.addTo(state.map);
+
     // Update inline map base layer
-    if (state.inlineTileLayer && state.inlineMap) {
-        state.inlineMap.removeLayer(state.inlineTileLayer);
-    }
     if (state.inlineMap) {
-        state.inlineTileLayer = L.tileLayer(tile.url, { maxZoom: 18, attribution: tile.attr }).addTo(state.inlineMap);
+        if (state.inlineTileLayer && state.inlineMap.hasLayer(state.inlineTileLayer)) {
+            state.inlineMap.removeLayer(state.inlineTileLayer);
+        }
+        state.inlineTileLayer = L.tileLayer(tile.url, { maxZoom: 18, attribution: tile.attr });
+        state.inlineTileLayer.addTo(state.inlineMap);
     }
+
     // Update button active states
     document.querySelectorAll('.map-style-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.style === style);
@@ -805,6 +886,7 @@ const disambiguationRules = {
 };
 
 // Disambiguate location based on surrounding text context
+// Returns: { region, coords, confidence, allOptions } or null
 function disambiguateLocation(name, text, matchIndex) {
     const rules = disambiguationRules[name];
     if (!rules) return null;
@@ -814,63 +896,237 @@ function disambiguateLocation(name, text, matchIndex) {
     const contextEnd = Math.min(text.length, matchIndex + name.length + 200);
     const context = text.slice(contextStart, contextEnd).toLowerCase();
 
-    let bestMatch = null;
-    let bestScore = 0;
-
+    // Score all options
+    const options = [];
     for (const [region, rule] of Object.entries(rules)) {
         const score = rule.keywords.filter(kw => context.includes(kw.toLowerCase())).length;
-        if (score > bestScore) {
-            bestScore = score;
-            bestMatch = { region, coords: rule.coords };
-        }
+        options.push({
+            region,
+            coords: rule.coords,
+            score,
+            keywords: rule.keywords,
+            label: getDisambiguationLabel(name, region)
+        });
     }
 
-    return bestMatch;
+    // Sort by score descending
+    options.sort((a, b) => b.score - a.score);
+
+    const bestMatch = options[0];
+    const hasConfidentMatch = bestMatch.score >= 2; // Need at least 2 keyword matches for confidence
+    const hasTie = options.length > 1 && options[1].score === bestMatch.score;
+
+    return {
+        region: bestMatch.region,
+        coords: bestMatch.coords,
+        confidence: hasConfidentMatch && !hasTie ? 'high' : 'low',
+        allOptions: options,
+        needsUserInput: !hasConfidentMatch || hasTie
+    };
+}
+
+// Get human-readable label for disambiguation option
+function getDisambiguationLabel(name, region) {
+    const labels = {
+        "Georgia": {
+            caucasus: "Georgia (Caucasus region)",
+            us: "Georgia (US state)"
+        },
+        "Alexandria": {
+            egypt: "Alexandria, Egypt",
+            virginia: "Alexandria, Virginia"
+        },
+        "Memphis": {
+            egypt: "Memphis, Egypt (ancient)",
+            us: "Memphis, Tennessee"
+        },
+        "Tripoli": {
+            libya: "Tripoli, Libya",
+            lebanon: "Tripoli, Lebanon"
+        }
+    };
+    return labels[name]?.[region] || `${name} (${region})`;
+}
+
+// Escape special regex characters
+function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Build flexible regex for multi-word terms (handles whitespace, hyphens, line breaks)
+function buildFlexibleRegex(term) {
+    const escaped = escapeRegex(term);
+    // Replace spaces with flexible whitespace pattern (handles spaces, hyphens, line breaks)
+    const flexible = escaped.replace(/\s+/g, '[\\s\\-]+');
+    return new RegExp("\\b" + flexible + "\\b", "gi");
 }
 
 // Extract entities for a page of text with disambiguation
+// Implements longest-match preference and proper regex escaping
 function extractEntitiesForPage(text) {
-    const entities = [], found = new Set();
-    Object.entries(geoDatabase).forEach(([loc, entry]) => {
-        if (found.has(loc.toLowerCase()) || entry.type === "river") return;
-        const terms = [loc, ...(entry.aliases || [])];
-        for (const term of terms) {
-            const regex = new RegExp("\\b" + term + "\\b", "gi");
-            const match = regex.exec(text);
-            if (match && !found.has(loc.toLowerCase())) {
-                found.add(loc.toLowerCase());
+    const candidateMatches = [];
 
-                // Check if disambiguation is needed
-                const disambiguation = disambiguateLocation(loc, text, match.index);
-                const entity = {
+    // Step 1: Find ALL possible matches from geoDatabase
+    Object.entries(geoDatabase).forEach(([loc, entry]) => {
+        if (entry.type === "river") return;
+        const terms = [loc, ...(entry.aliases || [])];
+
+        for (const term of terms) {
+            const regex = buildFlexibleRegex(term);
+            let match;
+            regex.lastIndex = 0; // Reset regex state
+
+            while ((match = regex.exec(text)) !== null) {
+                candidateMatches.push({
                     text: match[0],
                     type: entry.type === "region" ? "region" : "location",
                     name: loc,
                     index: match.index,
-                    length: match[0].length
-                };
-
-                // Add disambiguation info if found
-                if (disambiguation) {
-                    entity.disambiguatedRegion = disambiguation.region;
-                    entity.disambiguatedCoords = disambiguation.coords;
-                }
-
-                entities.push(entity);
-                break;
+                    length: match[0].length,
+                    matchedTerm: term
+                });
             }
         }
     });
+
+    // Step 2: Find event-based matches (Battle of, Siege of, etc.)
     [/Battle of ([A-Z][a-z]+)/gi, /Siege of ([A-Z][a-z]+)/gi, /Fall of ([A-Z][a-z]+)/gi, /Treaty of ([A-Z][a-z]+)/gi].forEach(pattern => {
         let m;
+        pattern.lastIndex = 0; // Reset regex state
         while ((m = pattern.exec(text)) !== null) {
-            if (!found.has(m[0].toLowerCase())) {
-                found.add(m[0].toLowerCase());
-                entities.push({ text: m[0], type: "event", name: m[0], locationName: m[1], index: m.index, length: m[0].length });
-            }
+            candidateMatches.push({
+                text: m[0],
+                type: "event",
+                name: m[0],
+                locationName: m[1],
+                index: m.index,
+                length: m[0].length
+            });
         }
     });
+
+    // Step 3: Sort by longest match first, then by position
+    candidateMatches.sort((a, b) => {
+        if (b.length !== a.length) return b.length - a.length; // Longest first
+        return a.index - b.index; // Earlier position if same length
+    });
+
+    // Step 4: Filter out overlapping matches (keep only longest, non-overlapping)
+    const entities = [];
+    const usedRanges = [];
+
+    for (const candidate of candidateMatches) {
+        const start = candidate.index;
+        const end = candidate.index + candidate.length;
+
+        // Check if this range overlaps with any already used range
+        const overlaps = usedRanges.some(range =>
+            (start >= range.start && start < range.end) ||
+            (end > range.start && end <= range.end) ||
+            (start <= range.start && end >= range.end)
+        );
+
+        if (!overlaps) {
+            // Check if disambiguation is needed
+            const disambiguation = disambiguateLocation(candidate.name, text, candidate.index);
+            const entity = { ...candidate };
+
+            // Add disambiguation info if found
+            if (disambiguation) {
+                entity.disambiguatedRegion = disambiguation.region;
+                entity.disambiguatedCoords = disambiguation.coords;
+                entity.disambiguationConfidence = disambiguation.confidence;
+                entity.disambiguationOptions = disambiguation.allOptions;
+                entity.needsUserInput = disambiguation.needsUserInput;
+            }
+
+            entities.push(entity);
+            usedRanges.push({ start, end });
+        }
+    }
+
+    // Step 5: Sort final entities by position for rendering
+    entities.sort((a, b) => a.index - b.index);
+
     return entities;
+}
+
+// Show disambiguation modal for ambiguous locations
+function showDisambiguationModal(locationName, entity, badgeElement) {
+    const modal = document.getElementById('disambiguationModal');
+    const question = document.getElementById('disambiguationQuestion');
+    const optionsContainer = document.getElementById('disambiguationOptions');
+
+    // Set question text
+    question.textContent = `We found "${locationName}" in your document, but it could refer to multiple places. Which one did you mean?`;
+
+    // Clear previous options
+    optionsContainer.innerHTML = '';
+
+    // Create option buttons
+    entity.disambiguationOptions.forEach((option, index) => {
+        const optionBtn = document.createElement('button');
+        optionBtn.className = 'disambiguation-option';
+
+        const label = document.createElement('div');
+        label.className = 'option-label';
+        label.textContent = option.label;
+
+        const keywords = document.createElement('div');
+        keywords.className = 'option-keywords';
+        keywords.textContent = `Context keywords: ${option.keywords.join(', ')}`;
+
+        optionBtn.appendChild(label);
+        optionBtn.appendChild(keywords);
+
+        // Click handler for option selection
+        optionBtn.onclick = () => {
+            selectDisambiguationOption(locationName, option, badgeElement, entity);
+            closeDisambiguationModal();
+        };
+
+        optionsContainer.appendChild(optionBtn);
+    });
+
+    // Show modal
+    modal.classList.add('open');
+    state.disambiguationModalOpen = true;
+}
+
+// Close disambiguation modal
+function closeDisambiguationModal() {
+    const modal = document.getElementById('disambiguationModal');
+    modal.classList.remove('open');
+    state.disambiguationModalOpen = false;
+}
+
+// Select a disambiguation option and remember it
+function selectDisambiguationOption(locationName, option, badgeElement, entity) {
+    // Save user choice to localStorage (scoped to current document)
+    const docHash = state.documentName || 'default';
+    const storageKey = `disambiguation_${docHash}`;
+    const choices = JSON.parse(localStorage.getItem(storageKey) || '{}');
+    choices[locationName] = option.region;
+    localStorage.setItem(storageKey, JSON.stringify(choices));
+
+    // Update entity with selected coordinates
+    entity.disambiguatedCoords = option.coords;
+    entity.disambiguatedRegion = option.region;
+
+    // Remove low-confidence indicator from badge
+    badgeElement.classList.remove('low-confidence');
+
+    // Update stored location data
+    const locationData = state.allLocations.find(loc => loc.element === badgeElement);
+    if (locationData) {
+        locationData.disambiguatedCoords = option.coords;
+    }
+
+    // Navigate to selected location
+    handleLocationClick(locationName, badgeElement, entity.type, entity.locationName);
+
+    // Show success message
+    showToast(`Location set to: ${option.label}`, 'info', 2000);
 }
 
 // Handle clicking on a location badge
@@ -1254,15 +1510,37 @@ async function renderPage(pageNum) {
 
                     const hl = document.createElement("div");
                     hl.className = "location-badge" + (entity.type === "region" ? " region-badge" : entity.type === "event" ? " event-badge" : "");
+
+                    // Add low-confidence indicator if disambiguation confidence is low
+                    if (entity.disambiguationConfidence === 'low') {
+                        hl.classList.add('low-confidence');
+                    }
+
                     hl.dataset.location = entity.name;
                     hl.dataset.entityType = entity.type;
                     if (entity.locationName) hl.dataset.eventLocation = entity.locationName;
+
+                    // Store disambiguation data for click handler
+                    if (entity.disambiguationOptions) {
+                        hl.dataset.disambiguationOptions = JSON.stringify(entity.disambiguationOptions);
+                        hl.dataset.needsUserInput = entity.needsUserInput;
+                    }
+
                     // Store viewport coordinates for accurate rescaling
                     hl.dataset.leftV = leftV;
                     hl.dataset.topV = topV;
                     hl.dataset.widthV = wV;
                     hl.dataset.heightV = hV;
-                    hl.onclick = () => handleLocationClick(entity.name, hl, entity.type, entity.locationName);
+
+                    // Click handler - show disambiguation UI if needed, otherwise navigate map
+                    hl.onclick = () => {
+                        if (entity.needsUserInput && entity.disambiguationOptions) {
+                            showDisambiguationModal(entity.name, entity, hl);
+                        } else {
+                            handleLocationClick(entity.name, hl, entity.type, entity.locationName);
+                        }
+                    };
+
                     textOverlay.appendChild(hl);
                     state.allLocations.push({ name: entity.name, element: hl, page: pageNum, type: entity.type, locationName: entity.locationName, disambiguatedCoords: entity.disambiguatedCoords });
 
@@ -1549,7 +1827,8 @@ function highlightEntityInEPUB(contentDiv, entity, chapterNum) {
 
     while (node = walker.nextNode()) {
         const text = node.textContent;
-        const regex = new RegExp(`\\b${entity.text}\\b`, 'gi');
+        const escapedText = escapeRegex(entity.text);
+        const regex = new RegExp(`\\b${escapedText}\\b`, 'gi');
         const match = regex.exec(text);
 
         if (match) {
@@ -2029,6 +2308,8 @@ document.getElementById("export-geojson")?.addEventListener("click", exportGeoJS
 document.getElementById("export-kml")?.addEventListener("click", exportKML);
 document.getElementById("export-csv")?.addEventListener("click", exportCSV);
 document.getElementById("close-export-modal")?.addEventListener("click", toggleExportModal);
+// Disambiguation modal close button
+document.getElementById("close-disambiguation-modal")?.addEventListener("click", closeDisambiguationModal);
 // Auto Map toggle (header button)
 document.getElementById("auto-map-toggle")?.addEventListener("click", toggleAutoMap);
 // Mobile menu: Auto Map toggle
