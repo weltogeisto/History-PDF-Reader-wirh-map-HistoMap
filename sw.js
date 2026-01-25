@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stt-reader-v2';
+const CACHE_NAME = 'stt-reader-v3';
 
 // Files that are guaranteed to be available locally. Keep this list lean to avoid install failures.
 const PRECACHE = [
@@ -9,7 +9,7 @@ const PRECACHE = [
 ];
 
 // A separate cache for runtime-fetched resources (e.g. third‑party CDNs).
-const RUNTIME_CACHE = 'stt-runtime-v2';
+const RUNTIME_CACHE = 'stt-runtime-v3';
 
 // Optional CDN assets to warm up on install. If any fail, the install still succeeds.
 const CDN_ASSETS = [
@@ -45,6 +45,7 @@ self.addEventListener('install', (event) => {
         await runtime.put(url, res);
       } catch (_) {}
     }));
+    // Force immediate activation
     self.skipWaiting();
   })());
 });
@@ -53,11 +54,13 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
+    // Delete ALL old caches to ensure fresh content
     await Promise.all(
       keys
         .filter((k) => ![CACHE_NAME, RUNTIME_CACHE].includes(k))
         .map((k) => caches.delete(k)),
     );
+    // Take control of all clients immediately
     self.clients.claim();
   })());
 });
@@ -69,30 +72,48 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Fetch handler: cache-first, fallback to network, and fall back to cached index on navigation.
+// Fetch handler: NETWORK-FIRST for local files (always get latest), cache-first for CDN assets
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const req = event.request;
+  const isLocalFile = req.url.startsWith(self.location.origin);
+
   event.respondWith((async () => {
-    // Attempt to serve from cache first
+    // NETWORK-FIRST for local files to ensure users always get latest version
+    if (isLocalFile) {
+      try {
+        const res = await fetch(req);
+        if (res && res.status === 200) {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(req, res.clone());
+        }
+        return res;
+      } catch (e) {
+        // Offline fallback to cache
+        const cached = await caches.match(req);
+        if (cached) return cached;
+        // Navigation fallback
+        if (req.mode === 'navigate' || req.destination === 'document') {
+          const fallback = await caches.match('./index.html');
+          return fallback || Response.error();
+        }
+        return Response.error();
+      }
+    }
+
+    // CACHE-FIRST for CDN assets (they don't change)
     const cached = await caches.match(req);
     if (cached) return cached;
+
     try {
       const res = await fetch(req);
-      // Cache only successful or opaque responses
       const cacheable = res && (res.status === 200 || res.type === 'opaque');
       if (cacheable) {
-        const targetCacheName = req.url.startsWith(self.location.origin) ? CACHE_NAME : RUNTIME_CACHE;
-        const cache = await caches.open(targetCacheName);
+        const cache = await caches.open(RUNTIME_CACHE);
         cache.put(req, res.clone());
       }
       return res;
     } catch (e) {
-      // Offline fallback for navigation
-      if (req.mode === 'navigate' || req.destination === 'document') {
-        const fallback = await caches.match('./index.html');
-        return fallback || Response.error();
-      }
       return Response.error();
     }
   })());
