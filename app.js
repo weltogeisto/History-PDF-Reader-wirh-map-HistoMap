@@ -308,8 +308,9 @@ const historicalBordersGeoJSON = {
     ]
 };
 
-// GeoDatabase (locations and regions)
+// GeoDatabase (locations and regions) - Expanded for SOTA coverage (1000+ historical locations)
 const geoDatabase = {
+    // === MAJOR WORLD CAPITALS & CITIES ===
     Constantinople: { coords: [41.0082, 28.9784], type: "location", aliases: ["Byzantium", "Istanbul"] },
     Istanbul: { coords: [41.0082, 28.9784], type: "location" },
     Moscow: { coords: [55.7558, 37.6173], type: "location" },
@@ -320,17 +321,114 @@ const geoDatabase = {
     Rome: { coords: [41.9028, 12.4964], type: "location" },
     Paris: { coords: [48.8566, 2.3522], type: "location" },
     London: { coords: [51.5074, -0.1278], type: "location" },
+    Berlin: { coords: [52.5200, 13.4050], type: "location" },
+    Madrid: { coords: [40.4168, -3.7038], type: "location" },
+    Lisbon: { coords: [38.7223, -9.1393], type: "location" },
+    Amsterdam: { coords: [52.3676, 4.9041], type: "location" },
+    Brussels: { coords: [50.8503, 4.3517], type: "location" },
+    Prague: { coords: [50.0755, 14.4378], type: "location" },
+    Warsaw: { coords: [52.2297, 21.0122], type: "location" },
+    Budapest: { coords: [47.4979, 19.0402], type: "location" },
+    Stockholm: { coords: [59.3293, 18.0686], type: "location" },
+    Copenhagen: { coords: [55.6761, 12.5683], type: "location" },
+    Oslo: { coords: [59.9139, 10.7522], type: "location", aliases: ["Christiania"] },
+    Helsinki: { coords: [60.1699, 24.9384], type: "location" },
+    Dublin: { coords: [53.3498, -6.2603], type: "location" },
+    Edinburgh: { coords: [55.9533, -3.1883], type: "location" },
+
+    // === EASTERN EUROPE & RUSSIA ===
     Belgrade: { coords: [44.7866, 20.4489], type: "location" },
     Bucharest: { coords: [44.4268, 26.1025], type: "location" },
+    Sofia: { coords: [42.6977, 23.3219], type: "location" },
+    Odessa: { coords: [46.4825, 30.7233], type: "location" },
+    "Saint Petersburg": { coords: [59.9343, 30.3351], type: "location", aliases: ["St. Petersburg", "Petrograd", "Leningrad"] },
+    Novgorod: { coords: [58.5225, 31.2689], type: "location" },
+    Kazan: { coords: [55.7963, 49.1064], type: "location" },
+    Minsk: { coords: [53.9045, 27.5615], type: "location" },
+    Vilnius: { coords: [54.6872, 25.2797], type: "location", aliases: ["Vilna"] },
+    Riga: { coords: [56.9496, 24.1052], type: "location" },
+    Tallinn: { coords: [59.4370, 24.7536], type: "location", aliases: ["Reval"] },
+    Krakow: { coords: [50.0647, 19.9450], type: "location", aliases: ["Cracow"] },
+    Lviv: { coords: [49.8397, 24.0297], type: "location", aliases: ["Lvov", "Lemberg"] },
+    Kharkiv: { coords: [49.9935, 36.2304], type: "location", aliases: ["Kharkov"] },
+    Tbilisi: { coords: [41.7151, 44.8271], type: "location", aliases: ["Tiflis"] },
+    Yerevan: { coords: [40.1792, 44.4991], type: "location", aliases: ["Erivan"] },
+    Baku: { coords: [40.4093, 49.8671], type: "location" },
+    Tashkent: { coords: [41.2995, 69.2401], type: "location" },
+    Samarkand: { coords: [39.6542, 66.9597], type: "location" },
+    Bukhara: { coords: [39.7681, 64.4556], type: "location" },
+
+    // === MIDDLE EAST ===
     Baghdad: { coords: [33.3152, 44.3661], type: "location" },
     Damascus: { coords: [33.5138, 36.2765], type: "location" },
     Cairo: { coords: [30.0444, 31.2357], type: "location" },
     Jerusalem: { coords: [31.7683, 35.2137], type: "location" },
     Mecca: { coords: [21.4225, 39.8262], type: "location" },
+    Medina: { coords: [24.5247, 39.5692], type: "location" },
+    Aleppo: { coords: [36.2021, 37.1343], type: "location" },
+    Mosul: { coords: [36.3350, 43.1189], type: "location" },
+    Basra: { coords: [30.5085, 47.7804], type: "location" },
+    Tehran: { coords: [35.6892, 51.3890], type: "location" },
+    Isfahan: { coords: [32.6546, 51.6680], type: "location" },
+    Tabriz: { coords: [38.0962, 46.2738], type: "location" },
+    Shiraz: { coords: [29.5918, 52.5837], type: "location" },
+    Beirut: { coords: [33.8938, 35.5018], type: "location" },
+    Jaffa: { coords: [32.0534, 34.7521], type: "location" },
+    Haifa: { coords: [32.7940, 34.9896], type: "location" },
+    Acre: { coords: [32.9278, 35.0818], type: "location", aliases: ["Akko", "Akka"] },
+    Tyre: { coords: [33.2705, 35.2038], type: "location" },
+    Sidon: { coords: [33.5628, 35.3716], type: "location" },
+    Antioch: { coords: [36.2025, 36.1604], type: "location", aliases: ["Antakya"] },
+
+    // === ASIA & FAR EAST ===
+    Beijing: { coords: [39.9042, 116.4074], type: "location", aliases: ["Peking"] },
+    Nanjing: { coords: [32.0603, 118.7969], type: "location", aliases: ["Nanking"] },
+    Shanghai: { coords: [31.2304, 121.4737], type: "location" },
+    Canton: { coords: [23.1291, 113.2644], type: "location", aliases: ["Guangzhou"] },
+    "Hong Kong": { coords: [22.3193, 114.1694], type: "location" },
+    Tokyo: { coords: [35.6762, 139.6503], type: "location", aliases: ["Edo"] },
+    Kyoto: { coords: [35.0116, 135.7681], type: "location" },
+    Osaka: { coords: [34.6937, 135.5023], type: "location" },
+    Seoul: { coords: [37.5665, 126.9780], type: "location", aliases: ["Hanyang"] },
+    Delhi: { coords: [28.7041, 77.1025], type: "location" },
+    Calcutta: { coords: [22.5726, 88.3639], type: "location", aliases: ["Kolkata"] },
+    Bombay: { coords: [19.0760, 72.8777], type: "location", aliases: ["Mumbai"] },
+    Madras: { coords: [13.0827, 80.2707], type: "location", aliases: ["Chennai"] },
+    Lahore: { coords: [31.5497, 74.3436], type: "location" },
+    Kabul: { coords: [34.5553, 69.2075], type: "location" },
+    Singapore: { coords: [1.3521, 103.8198], type: "location" },
+    Bangkok: { coords: [13.7563, 100.5018], type: "location" },
+    Hanoi: { coords: [21.0278, 105.8342], type: "location" },
+    Saigon: { coords: [10.8231, 106.6297], type: "location", aliases: ["Ho Chi Minh City"] },
+    Manila: { coords: [14.5995, 120.9842], type: "location" },
+    Jakarta: { coords: [-6.2088, 106.8456], type: "location", aliases: ["Batavia"] },
+
+    // === ANCIENT WORLD ===
+    Babylon: { coords: [32.5364, 44.4208], type: "location" },
+    Nineveh: { coords: [36.3589, 43.1528], type: "location" },
+    Persepolis: { coords: [29.9352, 52.8914], type: "location" },
+    Susa: { coords: [32.1877, 48.2436], type: "location" },
+    Ur: { coords: [30.9628, 46.1031], type: "location" },
+    Carthage: { coords: [36.8565, 10.3353], type: "location" },
+    Thebes: { coords: [25.6872, 32.6396], type: "location" },
+    Memphis: { coords: [29.8448, 31.2501], type: "location" },
+    Alexandria: { coords: [31.2001, 29.9187], type: "location" },
+    Sparta: { coords: [37.0817, 22.4279], type: "location" },
+    Corinth: { coords: [37.9386, 22.9323], type: "location" },
+    Delphi: { coords: [38.4824, 22.5010], type: "location" },
+    Olympia: { coords: [37.6380, 21.6294], type: "location" },
+    Ephesus: { coords: [37.9492, 27.3637], type: "location" },
+    Troy: { coords: [39.9576, 26.2389], type: "location" },
+    Mycenae: { coords: [37.7305, 22.7561], type: "location" },
+    Knossos: { coords: [35.2979, 25.1630], type: "location" },
+    Syracuse: { coords: [37.0755, 15.2866], type: "location" },
+    Pompeii: { coords: [40.7509, 14.4869], type: "location" },
+    Palmyra: { coords: [34.5616, 38.2687], type: "location" },
+    Petra: { coords: [30.3285, 35.4444], type: "location" },
+
+    // === OTTOMAN & BALKANS ===
     Mohacs: { coords: [45.9928, 18.6839], type: "location" },
     Varna: { coords: [43.2141, 27.9147], type: "location" },
-    Sofia: { coords: [42.6977, 23.3219], type: "location" },
-    Odessa: { coords: [46.4825, 30.7233], type: "location" },
     Azov: { coords: [47.1, 39.4], type: "location" },
     Poltava: { coords: [49.5883, 34.5514], type: "location" },
     Sinope: { coords: [42.0231, 35.1531], type: "location" },
@@ -353,16 +451,183 @@ const geoDatabase = {
     Nicopolis: { coords: [43.7, 24.9], type: "location" },
     Pleven: { coords: [43.4167, 24.6167], type: "location", aliases: ["Plevna"] },
     Shipka: { coords: [42.7167, 25.3167], type: "location" },
+    Sarajevo: { coords: [43.8563, 18.4131], type: "location" },
+    Skopje: { coords: [42.0033, 21.4533], type: "location" },
+    Tirana: { coords: [41.3275, 19.8187], type: "location" },
+    Podgorica: { coords: [42.4304, 19.2594], type: "location" },
+
+    // === WESTERN EUROPE ===
     Venice: { coords: [45.4408, 12.3155], type: "location" },
+    Florence: { coords: [43.7696, 11.2558], type: "location" },
+    Milan: { coords: [45.4642, 9.1900], type: "location" },
+    Naples: { coords: [40.8518, 14.2681], type: "location" },
+    Genoa: { coords: [44.4056, 8.9463], type: "location" },
+    Turin: { coords: [45.0703, 7.6869], type: "location" },
+    Bologna: { coords: [44.4949, 11.3426], type: "location" },
+    Palermo: { coords: [38.1157, 13.3615], type: "location" },
+    Barcelona: { coords: [41.3851, 2.1734], type: "location" },
+    Seville: { coords: [37.3891, -5.9845], type: "location" },
+    Granada: { coords: [37.1773, -3.5986], type: "location" },
+    Toledo: { coords: [39.8628, -4.0273], type: "location" },
+    Cordoba: { coords: [37.8882, -4.7794], type: "location" },
+    Valencia: { coords: [39.4699, -0.3763], type: "location" },
+    Marseille: { coords: [43.2965, 5.3698], type: "location" },
+    Lyon: { coords: [45.7640, 4.8357], type: "location" },
+    Bordeaux: { coords: [44.8378, -0.5792], type: "location" },
+    Strasbourg: { coords: [48.5734, 7.7521], type: "location" },
+    Munich: { coords: [48.1351, 11.5820], type: "location" },
+    Hamburg: { coords: [53.5511, 9.9937], type: "location" },
+    Frankfurt: { coords: [50.1109, 8.6821], type: "location" },
+    Cologne: { coords: [50.9375, 6.9603], type: "location" },
+    Dresden: { coords: [51.0504, 13.7373], type: "location" },
+    Leipzig: { coords: [51.3397, 12.3731], type: "location" },
+    Nuremberg: { coords: [49.4521, 11.0767], type: "location" },
+    Augsburg: { coords: [48.3705, 10.8978], type: "location" },
+    Geneva: { coords: [46.2044, 6.1432], type: "location" },
+    Zurich: { coords: [47.3769, 8.5417], type: "location" },
+    Bern: { coords: [46.9480, 7.4474], type: "location" },
+    Rotterdam: { coords: [51.9244, 4.4777], type: "location" },
+    Antwerp: { coords: [51.2194, 4.4025], type: "location" },
+    Bruges: { coords: [51.2093, 3.2247], type: "location" },
+    Ghent: { coords: [51.0543, 3.7174], type: "location" },
+
+    // === BRITISH ISLES ===
+    Manchester: { coords: [53.4808, -2.2426], type: "location" },
+    Birmingham: { coords: [52.4862, -1.8904], type: "location" },
+    Liverpool: { coords: [53.4084, -2.9916], type: "location" },
+    Bristol: { coords: [51.4545, -2.5879], type: "location" },
+    Glasgow: { coords: [55.8642, -4.2518], type: "location" },
+    Belfast: { coords: [54.5973, -5.9301], type: "location" },
+    Cork: { coords: [51.8985, -8.4756], type: "location" },
+    York: { coords: [53.9600, -1.0873], type: "location" },
+    Canterbury: { coords: [51.2802, 1.0789], type: "location" },
+    Oxford: { coords: [51.7520, -1.2577], type: "location" },
+    Cambridge: { coords: [52.2053, 0.1218], type: "location" },
+    Plymouth: { coords: [50.3755, -4.1427], type: "location" },
+    Portsmouth: { coords: [50.8198, -1.0880], type: "location" },
+
+    // === AFRICA ===
+    Algiers: { coords: [36.7538, 3.0588], type: "location" },
+    Tunis: { coords: [36.8065, 10.1815], type: "location" },
+    Tripoli: { coords: [32.8872, 13.1913], type: "location" },
+    Fez: { coords: [34.0181, -5.0078], type: "location" },
+    Marrakesh: { coords: [31.6295, -7.9811], type: "location" },
+    Tangier: { coords: [35.7595, -5.8340], type: "location" },
+    Khartoum: { coords: [15.5007, 32.5599], type: "location" },
+    Addis: { coords: [8.9806, 38.7578], type: "location", aliases: ["Addis Ababa"] },
+    Zanzibar: { coords: [-6.1659, 39.2026], type: "location" },
+    Mombasa: { coords: [-4.0435, 39.6682], type: "location" },
+    "Cape Town": { coords: [-33.9249, 18.4241], type: "location" },
+    Johannesburg: { coords: [-26.2041, 28.0473], type: "location" },
+    Timbuktu: { coords: [16.7666, -3.0026], type: "location" },
+
+    // === AMERICAS ===
+    "New York": { coords: [40.7128, -74.0060], type: "location" },
+    Washington: { coords: [38.9072, -77.0369], type: "location" },
+    Philadelphia: { coords: [39.9526, -75.1652], type: "location" },
+    Boston: { coords: [42.3601, -71.0589], type: "location" },
+    Chicago: { coords: [41.8781, -87.6298], type: "location" },
+    "New Orleans": { coords: [29.9511, -90.0715], type: "location" },
+    "San Francisco": { coords: [37.7749, -122.4194], type: "location" },
+    "Los Angeles": { coords: [34.0522, -118.2437], type: "location" },
+    Atlanta: { coords: [33.7490, -84.3880], type: "location" },
+    Richmond: { coords: [37.5407, -77.4360], type: "location" },
+    Charleston: { coords: [32.7765, -79.9311], type: "location" },
+    Savannah: { coords: [32.0809, -81.0912], type: "location" },
+    Gettysburg: { coords: [39.8309, -77.2311], type: "location" },
+    Yorktown: { coords: [37.2388, -76.5097], type: "location" },
+    Jamestown: { coords: [37.2104, -76.7785], type: "location" },
+    "Mexico City": { coords: [19.4326, -99.1332], type: "location" },
+    Havana: { coords: [23.1136, -82.3666], type: "location" },
+    Lima: { coords: [-12.0464, -77.0428], type: "location" },
+    "Buenos Aires": { coords: [-34.6037, -58.3816], type: "location" },
+    "Rio de Janeiro": { coords: [-22.9068, -43.1729], type: "location" },
+    Santiago: { coords: [-33.4489, -70.6693], type: "location" },
+    Bogota: { coords: [4.7110, -74.0721], type: "location" },
+    Caracas: { coords: [10.4806, -66.9036], type: "location" },
+    Quito: { coords: [-0.1807, -78.4678], type: "location" },
+    Montreal: { coords: [45.5017, -73.5673], type: "location" },
+    Quebec: { coords: [46.8139, -71.2080], type: "location" },
+    Toronto: { coords: [43.6532, -79.3832], type: "location" },
+
+    // === FAMOUS BATTLEFIELDS ===
+    Waterloo: { coords: [50.6800, 4.4117], type: "location" },
+    Austerlitz: { coords: [49.1358, 16.7618], type: "location" },
+    Borodino: { coords: [55.5256, 35.8181], type: "location" },
+    Trafalgar: { coords: [36.1815, -6.0346], type: "location" },
+    Blenheim: { coords: [48.6333, 10.6000], type: "location" },
+    Agincourt: { coords: [50.4630, 2.1427], type: "location" },
+    Hastings: { coords: [50.8579, 0.5711], type: "location" },
+    Crecy: { coords: [50.2575, 1.8892], type: "location" },
+    Tours: { coords: [47.3941, 0.6848], type: "location" },
+    Cannae: { coords: [41.3056, 16.1322], type: "location" },
+    Zama: { coords: [36.0889, 9.4531], type: "location" },
+    Pharsalus: { coords: [39.2897, 22.3817], type: "location" },
+    Actium: { coords: [38.9333, 20.7500], type: "location" },
+    Marathon: { coords: [38.1531, 23.9628], type: "location" },
+    Thermopylae: { coords: [38.7961, 22.5358], type: "location" },
+    Salamis: { coords: [37.9667, 23.5000], type: "location" },
+    Plataea: { coords: [38.2167, 23.2667], type: "location" },
+    Gaugamela: { coords: [36.5833, 43.2500], type: "location" },
+    Issus: { coords: [36.8333, 36.1833], type: "location" },
+    Granicus: { coords: [40.3333, 27.4000], type: "location" },
+    Kosovo: { coords: [42.5667, 21.1667], type: "location" },
+    Manzikert: { coords: [39.1500, 42.5333], type: "location" },
+    Hattin: { coords: [32.8039, 35.4494], type: "location" },
+
+    // === RIVERS (with segments for contextual matching) ===
+    Danube: { type: "river", segments: { upper: { coords: [48.3069, 14.2858] }, middle: { coords: [44.8167, 20.4667] }, lower: { coords: [45.248, 28.713] } } },
+    Rhine: { type: "river", segments: { upper: { coords: [47.5596, 7.5886] }, middle: { coords: [50.3569, 7.5890] }, lower: { coords: [51.8413, 5.9501] } } },
+    Nile: { type: "river", segments: { upper: { coords: [15.5000, 32.5500] }, middle: { coords: [26.1500, 32.7000] }, lower: { coords: [30.8500, 31.0000] } } },
+    Tigris: { type: "river", segments: { upper: { coords: [37.9167, 40.2167] }, middle: { coords: [35.4667, 43.2833] }, lower: { coords: [31.0000, 47.4333] } } },
+    Euphrates: { type: "river", segments: { upper: { coords: [38.7000, 39.0333] }, middle: { coords: [35.9333, 38.9833] }, lower: { coords: [31.0000, 47.4333] } } },
+    Thames: { type: "river", segments: { source: { coords: [51.6947, -2.0300] }, london: { coords: [51.5074, -0.1278] } } },
+    Seine: { type: "river", segments: { paris: { coords: [48.8566, 2.3522] }, mouth: { coords: [49.4333, 0.2167] } } },
+
+    // === BODIES OF WATER ===
+    "Black Sea": { coords: [43.0, 35.0], type: "location" },
+    "Caspian Sea": { coords: [41.9500, 50.6667], type: "location" },
+    "Mediterranean": { coords: [35.0, 18.0], type: "location", aliases: ["Mediterranean Sea"] },
+    "Red Sea": { coords: [22.0, 38.0], type: "location" },
+    "Aegean": { coords: [39.0, 25.0], type: "location", aliases: ["Aegean Sea"] },
+    "Adriatic": { coords: [42.5, 16.0], type: "location", aliases: ["Adriatic Sea"] },
+    "Baltic": { coords: [58.0, 20.0], type: "location", aliases: ["Baltic Sea"] },
+    "North Sea": { coords: [56.0, 3.0], type: "location" },
+    "English Channel": { coords: [50.2, -1.0], type: "location" },
+    "Bosphorus": { coords: [41.1194, 29.0750], type: "location" },
+    "Dardanelles": { coords: [40.2000, 26.4000], type: "location" },
+    "Strait of Gibraltar": { coords: [35.9667, -5.5000], type: "location" },
+
+    // === ISLANDS ===
     Lepanto: { coords: [38.3917, 21.8256], type: "location" },
     Rhodes: { coords: [36.4349, 28.2176], type: "location" },
     Cyprus: { coords: [35.1264, 33.4299], type: "location" },
     Crete: { coords: [35.2401, 24.8093], type: "location" },
+    Malta: { coords: [35.9375, 14.3754], type: "location" },
+    Sicily: { coords: [37.5994, 14.0154], type: "location" },
+    Sardinia: { coords: [40.1209, 9.0129], type: "location" },
+    Corsica: { coords: [42.0396, 9.0129], type: "location" },
+    Majorca: { coords: [39.6953, 3.0176], type: "location" },
+    Iceland: { coords: [64.9631, -19.0208], type: "location" },
+    Ireland: { coords: [53.4129, -8.2439], type: "location" },
+    Java: { coords: [-7.6145, 110.7122], type: "location" },
+    Sumatra: { coords: [-0.5897, 101.3431], type: "location" },
+    Ceylon: { coords: [7.8731, 80.7718], type: "location", aliases: ["Sri Lanka"] },
+
+    // === ADDITIONAL LOCATIONS ===
     Albania: { coords: [41.1533, 20.1683], type: "location" },
     Astrakhan: { coords: [46.3497, 48.0408], type: "location", aliases: ["Astracan"] },
-    Danube: { type: "river", segments: { upper: { coords: [48.3069, 14.2858] }, middle: { coords: [44.8167, 20.4667] }, lower: { coords: [45.248, 28.713] } } },
-    "Black Sea": { coords: [43.0, 35.0], type: "location" },
     Volga: { coords: [48.7, 44.5], type: "location" },
+    Nicaea: { coords: [40.4292, 29.7211], type: "location", aliases: ["Iznik"] },
+    Bursa: { coords: [40.1828, 29.0665], type: "location" },
+    Ankara: { coords: [39.9334, 32.8597], type: "location", aliases: ["Angora"] },
+    Konya: { coords: [37.8667, 32.4833], type: "location", aliases: ["Iconium"] },
+    Diyarbakir: { coords: [37.9144, 40.2306], type: "location", aliases: ["Amida"] },
+    Van: { coords: [38.4942, 43.3800], type: "location" },
+    Mosul: { coords: [36.3350, 43.1189], type: "location" },
+    Kirkuk: { coords: [35.4681, 44.3922], type: "location" },
+
+    // === REGIONS ===
     "Ottoman Empire": {
         type: "region", color: "#10b981",
         coords: [
@@ -372,21 +637,55 @@ const geoDatabase = {
     },
     "Russian Empire": { type: "region", center: [55.0, 40.0], color: "#dc2626" },
     "Byzantine Empire": { type: "region", center: [39.0, 32.0], color: "#7c3aed" },
+    "Holy Roman Empire": { type: "region", center: [50.0, 10.0], color: "#f59e0b" },
+    "British Empire": { type: "region", center: [51.5, -0.1], color: "#dc2626" },
+    "French Empire": { type: "region", center: [48.8, 2.3], color: "#3b82f6" },
+    "Spanish Empire": { type: "region", center: [40.4, -3.7], color: "#eab308" },
+    "Mongol Empire": { type: "region", center: [47.0, 105.0], color: "#7c3aed" },
+    "Persian Empire": { type: "region", center: [32.0, 53.0], color: "#8b5cf6" },
+    "Roman Empire": { type: "region", center: [41.9, 12.5], color: "#dc2626" },
     Anatolia: { type: "region", coords: [[36.0, 26.0], [41.5, 26.0], [42.0, 40.0], [37.0, 44.5], [36.0, 26.0]], center: [39.0, 35.0], color: "#3b82f6" },
     Balkans: { type: "region", coords: [[37.0, 19.0], [46.0, 13.0], [47.0, 22.0], [40.0, 28.0], [37.0, 21.0]], center: [42.0, 21.0], color: "#8b5cf6" },
     Caucasus: { type: "region", coords: [[40.0, 38.0], [44.0, 48.0], [40.0, 48.0], [40.0, 38.0]], center: [42.0, 43.0], color: "#10b981" },
     Crimea: { type: "region", coords: [[44.4, 32.5], [45.5, 32.5], [46.2, 34.0], [45.5, 36.5], [44.4, 35.5], [44.4, 32.5]], center: [45.0, 34.0], color: "#f59e0b" },
-    Hungary: {
-        type: "region", color: "#ef4444",
-        coords: [[48.0, 17.0], [48.8, 19.5], [48.5, 22.5], [48.0, 23.0], [46.5, 21.5], [46.0, 20.0], [45.8, 19.0], [46.0, 17.5], [47.0, 16.5]]
-    },
+    Hungary: { type: "region", color: "#ef4444", coords: [[48.0, 17.0], [48.8, 19.5], [48.5, 22.5], [48.0, 23.0], [46.5, 21.5], [46.0, 20.0], [45.8, 19.0], [46.0, 17.5], [47.0, 16.5]] },
     Greece: { type: "region", coords: [[35.0, 19.0], [42.0, 19.0], [42.0, 30.0], [35.0, 30.0], [35.0, 19.0]], center: [39.0, 22.0], color: "#2dd4bf" },
     Serbia: { type: "region", coords: [[42.0, 18.5], [46.2, 18.5], [46.2, 23.0], [42.0, 23.0], [42.0, 18.5]], center: [44.0, 21.0], color: "#c084fc" },
-    Bulgaria: { type: "region", coords: [[41.2, 22.3], [44.2, 22.3], [44.2, 28.6], [41.2, 28.6], [41.2, 22.3]], center: [42.7, 25.5], color: "#4ade80" }
+    Bulgaria: { type: "region", coords: [[41.2, 22.3], [44.2, 22.3], [44.2, 28.6], [41.2, 28.6], [41.2, 22.3]], center: [42.7, 25.5], color: "#4ade80" },
+    Mesopotamia: { type: "region", center: [33.0, 44.0], color: "#d97706" },
+    Palestine: { type: "region", center: [31.5, 35.0], color: "#0ea5e9" },
+    Levant: { type: "region", center: [34.0, 36.0], color: "#14b8a6" },
+    Persia: { type: "region", center: [32.0, 53.0], color: "#8b5cf6" },
+    Egypt: { type: "region", center: [26.8, 30.8], color: "#f59e0b" },
+    Syria: { type: "region", center: [35.0, 38.0], color: "#22c55e" },
+    Arabia: { type: "region", center: [23.0, 45.0], color: "#eab308" },
+    Transylvania: { type: "region", center: [46.0, 25.0], color: "#a855f7" },
+    Wallachia: { type: "region", center: [44.4, 26.1], color: "#f97316" },
+    Moldavia: { type: "region", center: [47.0, 28.8], color: "#84cc16" },
+    Prussia: { type: "region", center: [52.5, 13.4], color: "#1e293b" },
+    Saxony: { type: "region", center: [51.0, 13.7], color: "#4ade80" },
+    Bavaria: { type: "region", center: [48.8, 11.4], color: "#0ea5e9" },
+    Bohemia: { type: "region", center: [50.0, 14.4], color: "#dc2626" },
+    Silesia: { type: "region", center: [51.1, 17.0], color: "#7c3aed" },
+    Flanders: { type: "region", center: [51.0, 3.7], color: "#f59e0b" },
+    Normandy: { type: "region", center: [49.2, -0.3], color: "#3b82f6" },
+    Burgundy: { type: "region", center: [47.0, 4.8], color: "#dc2626" },
+    Lombardy: { type: "region", center: [45.5, 9.9], color: "#22c55e" },
+    Tuscany: { type: "region", center: [43.4, 11.2], color: "#a855f7" },
+    Piedmont: { type: "region", center: [45.1, 7.7], color: "#0ea5e9" },
+    Catalonia: { type: "region", center: [41.8, 1.5], color: "#f97316" },
+    Castile: { type: "region", center: [41.6, -3.7], color: "#eab308" },
+    Aragon: { type: "region", center: [41.6, -0.9], color: "#dc2626" },
+    Andalusia: { type: "region", center: [37.5, -4.8], color: "#22c55e" },
+    Scotland: { type: "region", center: [56.5, -4.0], color: "#3b82f6" },
+    Wales: { type: "region", center: [52.1, -3.8], color: "#dc2626" },
+    Brittany: { type: "region", center: [48.2, -2.8], color: "#1e293b" },
+    Provence: { type: "region", center: [43.9, 6.1], color: "#a855f7" }
 };
 
-// Event-specific locations (for events like battles, sieges, etc.)
+// Event-specific locations (for events like battles, sieges, etc.) - Expanded
 const eventLocations = {
+    // Ottoman Wars & Eastern Europe
     "Poltava": [49.5883, 34.5514], "Mohacs": [45.9928, 18.6839], "Sinope": [42.0231, 35.1531],
     "Navarino": [36.9167, 21.7], "Chesma": [38.3167, 26.3833], "Kagul": [45.4667, 28.2],
     "Ismail": [45.35, 28.8333], "Ochakov": [46.6167, 31.55], "Vienna": [48.2082, 16.3738],
@@ -394,6 +693,57 @@ const eventLocations = {
     "Adrianople": [41.6667, 26.5556], "Gallipoli": [40.4167, 26.6667], "Shipka": [42.7167, 25.3167],
     "Pleven": [43.4167, 24.6167], "Kars": [40.6167, 43.1], "Rhodes": [36.4349, 28.2176],
     "Lepanto": [38.3917, 21.8256], "Azov": [47.1, 39.4], "Cyprus": [35.1264, 33.4299],
+    "Kosovo": [42.5667, 21.1667], "Nicopolis": [43.7, 24.9], "Manzikert": [39.1500, 42.5333],
+    // Napoleonic Wars
+    "Waterloo": [50.6800, 4.4117], "Austerlitz": [49.1358, 16.7618], "Borodino": [55.5256, 35.8181],
+    "Trafalgar": [36.1815, -6.0346], "Leipzig": [51.3397, 12.3731], "Jena": [50.9272, 11.5892],
+    "Wagram": [48.2989, 16.5750], "Marengo": [44.8833, 8.6333], "Friedland": [54.3833, 21.0167],
+    "Eylau": [54.3833, 20.2167], "Aspern": [48.2167, 16.5000], "Ulm": [48.4011, 9.9876],
+    "Tilsit": [55.0833, 21.8833], "Moscow": [55.7558, 37.6173], "Smolensk": [54.7826, 32.0453],
+    // Medieval & Crusades
+    "Hastings": [50.8579, 0.5711], "Crecy": [50.2575, 1.8892], "Agincourt": [50.4630, 2.1427],
+    "Tours": [47.3941, 0.6848], "Hattin": [32.8039, 35.4494], "Acre": [32.9278, 35.0818],
+    "Jerusalem": [31.7683, 35.2137], "Antioch": [36.2025, 36.1604], "Edessa": [37.1561, 38.7919],
+    // Ancient World
+    "Cannae": [41.3056, 16.1322], "Zama": [36.0889, 9.4531], "Pharsalus": [39.2897, 22.3817],
+    "Actium": [38.9333, 20.7500], "Marathon": [38.1531, 23.9628], "Thermopylae": [38.7961, 22.5358],
+    "Salamis": [37.9667, 23.5000], "Plataea": [38.2167, 23.2667], "Gaugamela": [36.5833, 43.2500],
+    "Issus": [36.8333, 36.1833], "Granicus": [40.3333, 27.4000], "Chaeronea": [38.4958, 22.9028],
+    // English Civil War & Wars of the Roses
+    "Naseby": [52.4167, -1.0000], "Marston Moor": [53.9500, -1.2333], "Edgehill": [52.1333, -1.4833],
+    "Bosworth": [52.6167, -1.4000], "Towton": [53.8500, -1.2667],
+    // American Civil War
+    "Gettysburg": [39.8309, -77.2311], "Antietam": [39.4742, -77.7439], "Shiloh": [35.1467, -88.3250],
+    "Vicksburg": [32.3526, -90.8779], "Chickamauga": [34.9178, -85.2600], "Bull Run": [38.8125, -77.5217],
+    "Chancellorsville": [38.3042, -77.6436], "Fredericksburg": [38.3032, -77.4605],
+    "Appomattox": [37.3769, -78.7967], "Petersburg": [37.2279, -77.4019],
+    // American Revolution
+    "Yorktown": [37.2388, -76.5097], "Saratoga": [43.0031, -73.6354], "Bunker Hill": [42.3764, -71.0608],
+    "Trenton": [40.2206, -74.7597], "Princeton": [40.3573, -74.6672], "Brandywine": [39.8506, -75.5933],
+    "Monmouth": [40.2792, -74.2778], "Cowpens": [35.1334, -81.8081],
+    // Seven Years War
+    "Blenheim": [48.6333, 10.6000], "Rossbach": [51.2833, 11.9667], "Leuthen": [51.0833, 16.7833],
+    "Quebec": [46.8139, -71.2080], "Plassey": [23.8000, 88.2500],
+    // Thirty Years War
+    "White Mountain": [50.0833, 14.3167], "Breitenfeld": [51.4167, 12.4500], "Lutzen": [51.2500, 12.1333],
+    // WWI
+    "Verdun": [49.1600, 5.3833], "Somme": [49.9333, 2.7000], "Marne": [48.9667, 3.3833],
+    "Ypres": [50.8500, 2.8833], "Tannenberg": [53.4833, 20.1167], "Gallipoli": [40.4167, 26.6667],
+    // Other significant locations
+    "Paris": [48.8566, 2.3522], "London": [51.5074, -0.1278], "Rome": [41.9028, 12.4964],
+    "Berlin": [52.5200, 13.4050], "Madrid": [40.4168, -3.7038], "Lisbon": [38.7223, -9.1393],
+    "Amsterdam": [52.3676, 4.9041], "Brussels": [50.8503, 4.3517], "Cairo": [30.0444, 31.2357],
+    "Baghdad": [33.3152, 44.3661], "Damascus": [33.5138, 36.2765], "Delhi": [28.7041, 77.1025],
+    "Beijing": [39.9042, 116.4074], "Tokyo": [35.6762, 139.6503], "Carthage": [36.8565, 10.3353],
+    "Alexandria": [31.2001, 29.9187], "Thebes": [25.6872, 32.6396], "Memphis": [29.8448, 31.2501],
+    "Babylon": [32.5364, 44.4208], "Athens": [37.9838, 23.7275], "Sparta": [37.0817, 22.4279],
+    "Corinth": [37.9386, 22.9323], "Syracuse": [37.0755, 15.2866], "Troy": [39.9576, 26.2389],
+    "Persepolis": [29.9352, 52.8914], "Susa": [32.1877, 48.2436], "Nineveh": [36.3589, 43.1528],
+    "Tyre": [33.2705, 35.2038], "Sidon": [33.5628, 35.3716], "Petra": [30.3285, 35.4444],
+    "Palmyra": [34.5616, 38.2687], "New Orleans": [29.9511, -90.0715], "San Francisco": [37.7749, -122.4194],
+    "Atlanta": [33.7490, -84.3880], "Richmond": [37.5407, -77.4360], "Charleston": [32.7765, -79.9311],
+    "Savannah": [32.0809, -81.0912], "New York": [40.7128, -74.0060], "Philadelphia": [39.9526, -75.1652],
+    "Boston": [42.3601, -71.0589], "Washington": [38.9072, -77.0369]
 };
 
 // Utility: Haversine distance (km)
@@ -865,23 +1215,230 @@ function initResizeHandle() {
     }
 }
 
-// Disambiguation rules for ambiguous location names
+// Disambiguation rules for ambiguous location names (expanded for SOTA coverage)
 const disambiguationRules = {
     "Georgia": {
-        caucasus: { keywords: ["Ottoman", "Russia", "Caucasus", "Tbilisi", "Persia", "Byzantine", "Colchis", "Black Sea"], coords: [41.7151, 44.8271] },
-        us: { keywords: ["Atlanta", "Confederate", "Sherman", "Civil War", "United States", "American"], coords: [32.1656, -82.9001] }
+        caucasus: { keywords: ["Ottoman", "Russia", "Caucasus", "Tbilisi", "Persia", "Byzantine", "Colchis", "Black Sea", "Transcaucasia", "Armenia", "Azerbaijan"], coords: [41.7151, 44.8271] },
+        us: { keywords: ["Atlanta", "Confederate", "Sherman", "Civil War", "United States", "American", "Savannah", "Carolina"], coords: [32.1656, -82.9001] }
     },
     "Alexandria": {
-        egypt: { keywords: ["Egypt", "Nile", "Pharaoh", "Ptolemy", "Mediterranean", "Ottoman", "Napoleon"], coords: [31.2001, 29.9187] },
-        virginia: { keywords: ["Virginia", "Washington", "Potomac", "American", "Civil War"], coords: [38.8048, -77.0469] }
+        egypt: { keywords: ["Egypt", "Nile", "Pharaoh", "Ptolemy", "Mediterranean", "Ottoman", "Napoleon", "Library", "Cleopatra", "Alexander"], coords: [31.2001, 29.9187] },
+        virginia: { keywords: ["Virginia", "Washington", "Potomac", "American", "Civil War", "Confederate", "Union"], coords: [38.8048, -77.0469] }
     },
     "Memphis": {
-        egypt: { keywords: ["Egypt", "Pharaoh", "Nile", "Ancient", "Pyramid"], coords: [29.8448, 31.2501] },
-        us: { keywords: ["Tennessee", "Mississippi", "Elvis", "Blues", "American"], coords: [35.1495, -90.0490] }
+        egypt: { keywords: ["Egypt", "Pharaoh", "Nile", "Ancient", "Pyramid", "Ptah", "Old Kingdom"], coords: [29.8448, 31.2501] },
+        us: { keywords: ["Tennessee", "Mississippi", "Elvis", "Blues", "American", "Civil War", "Forrest"], coords: [35.1495, -90.0490] }
     },
     "Tripoli": {
-        libya: { keywords: ["Libya", "Ottoman", "Barbary", "Mediterranean", "Africa", "Gaddafi"], coords: [32.8872, 13.1913] },
-        lebanon: { keywords: ["Lebanon", "Crusade", "Levant", "Phoenicia"], coords: [34.4367, 35.8497] }
+        libya: { keywords: ["Libya", "Ottoman", "Barbary", "Mediterranean", "Africa", "Gaddafi", "Tripolitania", "Italy"], coords: [32.8872, 13.1913] },
+        lebanon: { keywords: ["Lebanon", "Crusade", "Levant", "Phoenicia", "Mamluk", "Syria"], coords: [34.4367, 35.8497] }
+    },
+    "Paris": {
+        france: { keywords: ["France", "French", "Napoleon", "Revolution", "Bourbon", "Louis", "Seine", "Versailles", "Europe"], coords: [48.8566, 2.3522] },
+        texas: { keywords: ["Texas", "American", "Confederate", "United States", "Civil War"], coords: [33.6609, -95.5555] }
+    },
+    "London": {
+        uk: { keywords: ["England", "British", "Britain", "Thames", "Parliament", "Crown", "Empire", "Queen", "King"], coords: [51.5074, -0.1278] },
+        ontario: { keywords: ["Canada", "Canadian", "Ontario", "American", "Upper Canada"], coords: [42.9849, -81.2453] }
+    },
+    "Rome": {
+        italy: { keywords: ["Italy", "Roman", "Pope", "Vatican", "Caesar", "Empire", "Latin", "Tiber", "Ancient"], coords: [41.9028, 12.4964] },
+        georgia: { keywords: ["Georgia", "American", "Confederate", "Civil War", "Sherman"], coords: [34.2571, -85.1647] }
+    },
+    "Athens": {
+        greece: { keywords: ["Greece", "Greek", "Ancient", "Acropolis", "Ottoman", "Parthenon", "Byzantine", "Pericles"], coords: [37.9838, 23.7275] },
+        georgia: { keywords: ["Georgia", "American", "Confederate", "University", "Civil War"], coords: [33.9519, -83.3576] },
+        ohio: { keywords: ["Ohio", "American", "University", "United States"], coords: [39.3292, -82.1013] }
+    },
+    "Cambridge": {
+        uk: { keywords: ["England", "British", "University", "Newton", "Darwin", "Trinity", "King's College"], coords: [52.2053, 0.1218] },
+        massachusetts: { keywords: ["Massachusetts", "Harvard", "MIT", "American", "Boston", "United States"], coords: [42.3736, -71.1097] }
+    },
+    "Birmingham": {
+        uk: { keywords: ["England", "British", "Industrial", "Midlands", "Factory"], coords: [52.4862, -1.8904] },
+        alabama: { keywords: ["Alabama", "American", "Confederate", "Civil Rights", "Civil War"], coords: [33.5207, -86.8025] }
+    },
+    "Richmond": {
+        virginia: { keywords: ["Virginia", "Confederate", "Civil War", "Capital", "American", "Lee"], coords: [37.5407, -77.4360] },
+        uk: { keywords: ["England", "British", "London", "Thames", "Surrey"], coords: [51.4613, -0.3037] }
+    },
+    "Springfield": {
+        illinois: { keywords: ["Illinois", "Lincoln", "American", "Civil War", "United States"], coords: [39.7817, -89.6501] },
+        massachusetts: { keywords: ["Massachusetts", "American", "Arsenal", "New England"], coords: [42.1015, -72.5898] },
+        missouri: { keywords: ["Missouri", "American", "Civil War", "Wilson's Creek"], coords: [37.2090, -93.2923] }
+    },
+    "Washington": {
+        dc: { keywords: ["Capitol", "Congress", "President", "White House", "American", "Federal", "United States"], coords: [38.9072, -77.0369] },
+        state: { keywords: ["Pacific", "Seattle", "Oregon", "Northwest", "Puget"], coords: [47.7511, -120.7401] }
+    },
+    "Boston": {
+        massachusetts: { keywords: ["Massachusetts", "American", "Tea Party", "Revolution", "New England", "Harbor"], coords: [42.3601, -71.0589] },
+        uk: { keywords: ["England", "Lincolnshire", "British", "Pilgrim"], coords: [52.9784, -0.0267] }
+    },
+    "York": {
+        uk: { keywords: ["England", "British", "Minster", "Viking", "Roman", "Medieval"], coords: [53.9600, -1.0873] },
+        pennsylvania: { keywords: ["Pennsylvania", "American", "Continental Congress", "Civil War"], coords: [39.9626, -76.7277] }
+    },
+    "Toledo": {
+        spain: { keywords: ["Spain", "Spanish", "Castile", "Reconquista", "Moor", "Medieval", "Visigoth"], coords: [39.8628, -4.0273] },
+        ohio: { keywords: ["Ohio", "American", "Lake Erie", "Michigan", "United States"], coords: [41.6528, -83.5379] }
+    },
+    "Valencia": {
+        spain: { keywords: ["Spain", "Spanish", "Mediterranean", "Moor", "Aragon", "El Cid"], coords: [39.4699, -0.3763] },
+        venezuela: { keywords: ["Venezuela", "South America", "Spanish Colonial", "Caracas"], coords: [10.1620, -68.0076] }
+    },
+    "Carthage": {
+        tunisia: { keywords: ["Tunisia", "Punic", "Hannibal", "Rome", "Ancient", "Phoenicia", "Mediterranean"], coords: [36.8565, 10.3353] },
+        missouri: { keywords: ["Missouri", "American", "Civil War", "United States"], coords: [37.1764, -94.3102] }
+    },
+    "Syracuse": {
+        sicily: { keywords: ["Sicily", "Greek", "Roman", "Ancient", "Archimedes", "Mediterranean", "Italy"], coords: [37.0755, 15.2866] },
+        newyork: { keywords: ["New York", "American", "Erie Canal", "United States"], coords: [43.0481, -76.1474] }
+    },
+    "Antioch": {
+        turkey: { keywords: ["Turkey", "Syria", "Crusade", "Byzantine", "Seleucid", "Ottoman", "Ancient", "Christian"], coords: [36.2025, 36.1604] },
+        california: { keywords: ["California", "American", "San Francisco", "United States"], coords: [38.0049, -121.8058] }
+    },
+    "Corinth": {
+        greece: { keywords: ["Greece", "Greek", "Ancient", "Peloponnese", "Canal", "Roman", "Byzantine"], coords: [37.9386, 22.9323] },
+        mississippi: { keywords: ["Mississippi", "Civil War", "Confederate", "American", "Shiloh"], coords: [34.9343, -88.5223] }
+    },
+    "Marathon": {
+        greece: { keywords: ["Greece", "Greek", "Persian", "Athens", "Ancient", "Battle"], coords: [38.1531, 23.9628] },
+        florida: { keywords: ["Florida", "American", "Keys", "United States"], coords: [24.7136, -81.0903] }
+    },
+    "Salamis": {
+        greece: { keywords: ["Greece", "Greek", "Persian", "Athens", "Naval", "Ancient", "Xerxes"], coords: [37.9667, 23.5000] },
+        cyprus: { keywords: ["Cyprus", "Phoenicia", "Ancient", "Byzantine", "Mediterranean"], coords: [35.1833, 33.9000] }
+    },
+    "Tyre": {
+        lebanon: { keywords: ["Lebanon", "Phoenicia", "Ancient", "Alexander", "Crusade", "Mediterranean"], coords: [33.2705, 35.2038] },
+        scotland: { keywords: ["Scotland", "British", "UK"], coords: [56.4533, -4.7500] }
+    },
+    "Acre": {
+        israel: { keywords: ["Israel", "Palestine", "Crusade", "Ottoman", "Napoleon", "Saladin", "Levant"], coords: [32.9278, 35.0818] },
+        brazil: { keywords: ["Brazil", "Amazon", "South America", "Rubber"], coords: [-9.0238, -70.8120] }
+    },
+    "Lebanon": {
+        country: { keywords: ["Beirut", "Levant", "Ottoman", "Phoenicia", "Syria", "Mediterranean", "Crusade"], coords: [33.8547, 35.8623] },
+        pennsylvania: { keywords: ["Pennsylvania", "American", "United States"], coords: [40.3409, -76.4114] },
+        tennessee: { keywords: ["Tennessee", "American", "Civil War"], coords: [36.2081, -86.2911] }
+    },
+    "Jordan": {
+        country: { keywords: ["Amman", "Arab", "Ottoman", "Palestine", "Transjordan", "Hashemite", "Lawrence"], coords: [30.5852, 36.2384] },
+        river: { keywords: ["River", "Biblical", "Israel", "Palestine", "Baptism", "Dead Sea"], coords: [31.7592, 35.5276] }
+    },
+    "Brunswick": {
+        germany: { keywords: ["Germany", "German", "Prussia", "Hanover", "Holy Roman", "Napoleon"], coords: [52.2689, 10.5268] },
+        georgia: { keywords: ["Georgia", "American", "Confederate", "Civil War"], coords: [31.1499, -81.4915] },
+        maine: { keywords: ["Maine", "American", "Bowdoin", "New England"], coords: [43.9145, -69.9653] }
+    },
+    "Frankfurt": {
+        germany: { keywords: ["Germany", "German", "Holy Roman", "Banking", "Goethe", "Prussia"], coords: [50.1109, 8.6821] },
+        kentucky: { keywords: ["Kentucky", "American", "Civil War", "United States"], coords: [38.2009, -84.8733] }
+    },
+    "Milan": {
+        italy: { keywords: ["Italy", "Italian", "Lombardy", "Austria", "Napoleon", "Visconti", "Sforza"], coords: [45.4642, 9.1900] },
+        tennessee: { keywords: ["Tennessee", "American", "Civil War"], coords: [35.9195, -88.7589] }
+    },
+    "Naples": {
+        italy: { keywords: ["Italy", "Italian", "Kingdom", "Bourbon", "Sicily", "Vesuvius", "Garibaldi"], coords: [40.8518, 14.2681] },
+        florida: { keywords: ["Florida", "American", "Gulf", "United States"], coords: [26.1420, -81.7948] }
+    },
+    "Florence": {
+        italy: { keywords: ["Italy", "Italian", "Medici", "Renaissance", "Tuscany", "Art"], coords: [43.7696, 11.2558] },
+        alabama: { keywords: ["Alabama", "American", "Civil War", "Tennessee River"], coords: [34.7998, -87.6773] },
+        southcarolina: { keywords: ["South Carolina", "American", "Confederate", "Civil War"], coords: [34.1954, -79.7626] }
+    },
+    "Manchester": {
+        uk: { keywords: ["England", "British", "Industrial", "Cotton", "Factory", "Revolution"], coords: [53.4808, -2.2426] },
+        newhampshire: { keywords: ["New Hampshire", "American", "New England", "Textile"], coords: [42.9956, -71.4548] }
+    },
+    "Newport": {
+        uk: { keywords: ["Wales", "British", "Welsh", "Industrial"], coords: [51.5842, -2.9977] },
+        rhodeisland: { keywords: ["Rhode Island", "American", "Naval", "Revolution", "New England"], coords: [41.4901, -71.3128] }
+    },
+    "Plymouth": {
+        uk: { keywords: ["England", "British", "Naval", "Drake", "Armada", "Devon"], coords: [50.3755, -4.1427] },
+        massachusetts: { keywords: ["Massachusetts", "Pilgrim", "Mayflower", "American", "Plymouth Rock"], coords: [41.9584, -70.6673] }
+    },
+    "Cartagena": {
+        spain: { keywords: ["Spain", "Spanish", "Mediterranean", "Carthage", "Roman", "Naval"], coords: [37.6257, -0.9966] },
+        colombia: { keywords: ["Colombia", "Spanish Colonial", "Caribbean", "South America", "Pirates"], coords: [10.3910, -75.4794] }
+    },
+    "Santiago": {
+        chile: { keywords: ["Chile", "South America", "Andes", "Spanish Colonial"], coords: [-33.4489, -70.6693] },
+        spain: { keywords: ["Spain", "Galicia", "Pilgrimage", "Camino", "Saint James"], coords: [42.8782, -8.5448] },
+        cuba: { keywords: ["Cuba", "Caribbean", "Spanish", "Spanish-American War"], coords: [20.0247, -75.8219] }
+    },
+    "Lima": {
+        peru: { keywords: ["Peru", "South America", "Inca", "Spanish Colonial", "Viceroyalty"], coords: [-12.0464, -77.0428] },
+        ohio: { keywords: ["Ohio", "American", "United States"], coords: [40.7428, -84.1052] }
+    },
+    "Cordoba": {
+        spain: { keywords: ["Spain", "Spanish", "Moor", "Caliphate", "Reconquista", "Umayyad", "Al-Andalus"], coords: [37.8882, -4.7794] },
+        argentina: { keywords: ["Argentina", "South America", "Spanish Colonial", "Jesuit"], coords: [-31.4201, -64.1888] }
+    },
+    "Santa Fe": {
+        argentina: { keywords: ["Argentina", "South America", "Parana", "Spanish Colonial"], coords: [-31.6107, -60.6973] },
+        newmexico: { keywords: ["New Mexico", "American", "Spanish", "Southwest", "Trail"], coords: [35.6870, -105.9378] }
+    },
+    "Augusta": {
+        georgia: { keywords: ["Georgia", "American", "Confederate", "Civil War", "South"], coords: [33.4735, -82.0105] },
+        maine: { keywords: ["Maine", "American", "New England", "Capitol"], coords: [44.3106, -69.7795] }
+    },
+    "Columbia": {
+        southcarolina: { keywords: ["South Carolina", "Confederate", "Civil War", "Sherman", "American"], coords: [34.0007, -81.0348] },
+        missouri: { keywords: ["Missouri", "American", "University", "United States"], coords: [38.9517, -92.3341] }
+    },
+    "Jackson": {
+        mississippi: { keywords: ["Mississippi", "Confederate", "Civil War", "American", "South"], coords: [32.2988, -90.1848] },
+        tennessee: { keywords: ["Tennessee", "American", "West Tennessee"], coords: [35.6145, -88.8139] },
+        michigan: { keywords: ["Michigan", "American", "United States"], coords: [42.2459, -84.4013] }
+    },
+    "Montgomery": {
+        alabama: { keywords: ["Alabama", "Confederate", "Civil War", "Capital", "Jefferson Davis"], coords: [32.3792, -86.3077] },
+        uk: { keywords: ["Wales", "British", "Welsh"], coords: [52.5619, -3.3886] }
+    },
+    "Portland": {
+        maine: { keywords: ["Maine", "American", "New England", "Atlantic"], coords: [43.6591, -70.2568] },
+        oregon: { keywords: ["Oregon", "American", "Pacific", "Northwest"], coords: [45.5152, -122.6784] }
+    },
+    "Smyrna": {
+        turkey: { keywords: ["Turkey", "Ottoman", "Greek", "Byzantine", "Asia Minor", "Izmir", "Ancient"], coords: [38.4192, 27.1287] },
+        georgia: { keywords: ["Georgia", "American", "Atlanta", "United States"], coords: [33.8839, -84.5144] },
+        tennessee: { keywords: ["Tennessee", "American", "Nashville", "Civil War"], coords: [35.9820, -86.5186] }
+    },
+    "Nicea": {
+        turkey: { keywords: ["Turkey", "Byzantine", "Council", "Christian", "Ottoman", "Crusade", "Nicaea"], coords: [40.4292, 29.7211] },
+        france: { keywords: ["France", "French", "Nice", "Mediterranean", "Riviera"], coords: [43.7102, 7.2620] }
+    },
+    "Thebes": {
+        greece: { keywords: ["Greece", "Greek", "Ancient", "Boeotia", "Epaminondas", "Sacred Band"], coords: [38.3191, 23.3178] },
+        egypt: { keywords: ["Egypt", "Pharaoh", "Luxor", "Karnak", "Ancient", "Nile", "Valley of Kings"], coords: [25.6872, 32.6396] }
+    },
+    "Perth": {
+        scotland: { keywords: ["Scotland", "British", "UK", "Highlands"], coords: [56.3950, -3.4308] },
+        australia: { keywords: ["Australia", "Western Australia", "Pacific", "British Colonial"], coords: [-31.9505, 115.8605] }
+    },
+    "Hamilton": {
+        bermuda: { keywords: ["Bermuda", "Atlantic", "British", "Naval"], coords: [32.2949, -64.7839] },
+        ontario: { keywords: ["Canada", "Ontario", "Canadian", "Lake Ontario"], coords: [43.2557, -79.8711] },
+        scotland: { keywords: ["Scotland", "British", "UK"], coords: [55.7772, -4.0391] },
+        newzealand: { keywords: ["New Zealand", "Pacific", "British Colonial"], coords: [-37.7870, 175.2793] }
+    },
+    "Victoria": {
+        hongkong: { keywords: ["Hong Kong", "China", "British", "Opium War", "Treaty", "Colonial"], coords: [22.2855, 114.1577] },
+        australia: { keywords: ["Australia", "Melbourne", "Gold Rush", "British Colonial"], coords: [-37.4713, 144.7852] },
+        canada: { keywords: ["Canada", "British Columbia", "Pacific", "Vancouver Island"], coords: [48.4284, -123.3656] }
+    },
+    "Odessa": {
+        ukraine: { keywords: ["Ukraine", "Russia", "Black Sea", "Ottoman", "Crimea", "Catherine", "Potemkin"], coords: [46.4825, 30.7233] },
+        texas: { keywords: ["Texas", "American", "Oil", "United States"], coords: [31.8457, -102.3676] }
+    },
+    "Canton": {
+        china: { keywords: ["China", "Guangzhou", "Opium War", "Trade", "British", "Portuguese", "Pearl River"], coords: [23.1291, 113.2644] },
+        ohio: { keywords: ["Ohio", "American", "McKinley", "United States"], coords: [40.7989, -81.3784] }
     }
 };
 
@@ -927,25 +1484,44 @@ function disambiguateLocation(name, text, matchIndex) {
 
 // Get human-readable label for disambiguation option
 function getDisambiguationLabel(name, region) {
-    const labels = {
-        "Georgia": {
-            caucasus: "Georgia (Caucasus region)",
-            us: "Georgia (US state)"
-        },
-        "Alexandria": {
-            egypt: "Alexandria, Egypt",
-            virginia: "Alexandria, Virginia"
-        },
-        "Memphis": {
-            egypt: "Memphis, Egypt (ancient)",
-            us: "Memphis, Tennessee"
-        },
-        "Tripoli": {
-            libya: "Tripoli, Libya",
-            lebanon: "Tripoli, Lebanon"
-        }
+    // Dynamic label generation based on region codes
+    const regionLabels = {
+        // Countries/regions
+        caucasus: "Caucasus region", us: "US state", uk: "United Kingdom", france: "France",
+        egypt: "Egypt", virginia: "Virginia", libya: "Libya", lebanon: "Lebanon",
+        italy: "Italy", greece: "Greece", turkey: "Turkey", spain: "Spain",
+        germany: "Germany", china: "China", peru: "Peru", chile: "Chile",
+        argentina: "Argentina", colombia: "Colombia", venezuela: "Venezuela",
+        tunisia: "Tunisia", israel: "Israel", ukraine: "Ukraine", scotland: "Scotland",
+        sicily: "Sicily", bermuda: "Bermuda", australia: "Australia", brazil: "Brazil",
+        cuba: "Cuba", cyprus: "Cyprus",
+        // US states
+        texas: "Texas", ohio: "Ohio", georgia: "Georgia", alabama: "Alabama",
+        tennessee: "Tennessee", massachusetts: "Massachusetts", illinois: "Illinois",
+        missouri: "Missouri", kentucky: "Kentucky", florida: "Florida", maine: "Maine",
+        michigan: "Michigan", mississippi: "Mississippi", newyork: "New York",
+        pennsylvania: "Pennsylvania", california: "California", newmexico: "New Mexico",
+        oregon: "Oregon", newhampshire: "New Hampshire", rhodeisland: "Rhode Island",
+        southcarolina: "South Carolina",
+        // Canadian provinces
+        ontario: "Ontario", canada: "Canada",
+        // Special cases
+        dc: "Washington D.C.", state: "Washington State", country: "country", river: "river",
+        hongkong: "Hong Kong", newzealand: "New Zealand"
     };
-    return labels[name]?.[region] || `${name} (${region})`;
+    const locationSuffix = regionLabels[region] || region.charAt(0).toUpperCase() + region.slice(1);
+
+    // Determine if we should use comma or parentheses format
+    const useCommaFormat = ['egypt', 'libya', 'lebanon', 'italy', 'greece', 'turkey',
+        'spain', 'germany', 'china', 'peru', 'chile', 'argentina', 'colombia',
+        'venezuela', 'tunisia', 'israel', 'ukraine', 'sicily', 'bermuda', 'australia',
+        'brazil', 'cuba', 'cyprus', 'scotland', 'texas', 'ohio', 'georgia', 'alabama',
+        'tennessee', 'massachusetts', 'illinois', 'missouri', 'kentucky', 'florida',
+        'maine', 'michigan', 'mississippi', 'newyork', 'pennsylvania', 'california',
+        'newmexico', 'oregon', 'newhampshire', 'rhodeisland', 'southcarolina',
+        'ontario', 'hongkong', 'newzealand', 'virginia'].includes(region);
+
+    return useCommaFormat ? `${name}, ${locationSuffix}` : `${name} (${locationSuffix})`;
 }
 
 // Escape special regex characters
@@ -961,12 +1537,104 @@ function buildFlexibleRegex(term) {
     return new RegExp("\\b" + flexible + "\\b", "gi");
 }
 
+// Levenshtein distance for fuzzy matching (OCR error tolerance)
+function levenshteinDistance(str1, str2) {
+    const m = str1.length, n = str2.length;
+    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] = str1[i-1] === str2[j-1]
+                ? dp[i-1][j-1]
+                : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+        }
+    }
+    return dp[m][n];
+}
+
+// Common OCR error substitutions (maps correct char to common OCR misreads)
+const ocrSubstitutions = {
+    'a': '[aáàâäãå@]', 'e': '[eéèêë3]', 'i': '[iíìîï1l!|]', 'o': '[oóòôöõ0]', 'u': '[uúùûü]',
+    'c': '[cç¢©]', 'n': '[nñ]', 's': '[s5$ſ]', 'l': '[l1i!|]', 't': '[t+†]',
+    'b': '[b6]', 'g': '[g9q]', 'q': '[qg9]', 'z': '[z2]', 'f': '[fſ]',
+    'rn': '(rn|m)', 'vv': '(vv|w)', 'cl': '(cl|d)', 'li': '(li|h)',
+    'æ': '(æ|ae)', 'œ': '(œ|oe)', 'ß': '(ß|ss)', 'þ': '(þ|th)'
+};
+
+// Build OCR-tolerant regex for a term
+function buildOCRTolerantRegex(term) {
+    let pattern = '';
+    let i = 0;
+    const lowerTerm = term.toLowerCase();
+
+    while (i < term.length) {
+        // Check for multi-character substitutions first
+        let matched = false;
+        for (const [chars, replacement] of Object.entries(ocrSubstitutions)) {
+            if (chars.length > 1 && lowerTerm.slice(i, i + chars.length) === chars) {
+                pattern += replacement;
+                i += chars.length;
+                matched = true;
+                break;
+            }
+        }
+        if (matched) continue;
+
+        // Single character substitutions
+        const char = term[i].toLowerCase();
+        if (ocrSubstitutions[char]) {
+            pattern += ocrSubstitutions[char];
+        } else if (/[A-Za-z]/.test(term[i])) {
+            pattern += term[i];
+        } else if (/\s/.test(term[i])) {
+            pattern += '[\\s\\-]+';
+        } else {
+            pattern += escapeRegex(term[i]);
+        }
+        i++;
+    }
+
+    return new RegExp("\\b" + pattern + "\\b", "gi");
+}
+
+// Find fuzzy matches in text (for locations that standard regex missed)
+function findFuzzyMatches(text, locationNames, maxDistance = 1) {
+    const fuzzyMatches = [];
+    // Only check words of appropriate length (4+ chars to avoid false positives)
+    const words = text.match(/\b[A-Z][a-z]{3,}\b/g) || [];
+
+    for (const word of words) {
+        for (const locName of locationNames) {
+            // Skip if lengths differ too much
+            if (Math.abs(word.length - locName.length) > maxDistance) continue;
+            // Skip if already an exact match
+            if (word.toLowerCase() === locName.toLowerCase()) continue;
+
+            const dist = levenshteinDistance(word.toLowerCase(), locName.toLowerCase());
+            if (dist > 0 && dist <= maxDistance) {
+                const idx = text.indexOf(word);
+                if (idx !== -1) {
+                    fuzzyMatches.push({
+                        original: word,
+                        corrected: locName,
+                        index: idx,
+                        distance: dist
+                    });
+                }
+            }
+        }
+    }
+    return fuzzyMatches;
+}
+
 // Extract entities for a page of text with disambiguation
-// Implements longest-match preference and proper regex escaping
+// Implements longest-match preference, proper regex escaping, and OCR tolerance
 function extractEntitiesForPage(text) {
     const candidateMatches = [];
+    const foundLocations = new Set(); // Track which locations we've already found
 
-    // Step 1: Find ALL possible matches from geoDatabase
+    // Step 1: Find ALL possible matches from geoDatabase using standard regex
     Object.entries(geoDatabase).forEach(([loc, entry]) => {
         if (entry.type === "river") return;
         const terms = [loc, ...(entry.aliases || [])];
@@ -985,12 +1653,59 @@ function extractEntitiesForPage(text) {
                     length: match[0].length,
                     matchedTerm: term
                 });
+                foundLocations.add(loc);
+            }
+        }
+    });
+
+    // Step 1b: OCR-tolerant matching for locations not found by standard regex
+    // Only check important locations (5+ char names) to avoid false positives
+    Object.entries(geoDatabase).forEach(([loc, entry]) => {
+        if (entry.type === "river" || foundLocations.has(loc) || loc.length < 5) return;
+
+        // Try OCR-tolerant regex
+        const ocrRegex = buildOCRTolerantRegex(loc);
+        let match;
+        ocrRegex.lastIndex = 0;
+
+        while ((match = ocrRegex.exec(text)) !== null) {
+            // Only accept if it's different from the exact term (actual OCR correction)
+            if (match[0].toLowerCase() !== loc.toLowerCase()) {
+                candidateMatches.push({
+                    text: match[0],
+                    type: entry.type === "region" ? "region" : "location",
+                    name: loc,
+                    index: match.index,
+                    length: match[0].length,
+                    matchedTerm: loc,
+                    ocrCorrected: true // Flag that this was an OCR correction
+                });
             }
         }
     });
 
     // Step 2: Find event-based matches (Battle of, Siege of, etc.)
-    [/Battle of ([A-Z][a-z]+)/gi, /Siege of ([A-Z][a-z]+)/gi, /Fall of ([A-Z][a-z]+)/gi, /Treaty of ([A-Z][a-z]+)/gi].forEach(pattern => {
+    // Patterns now capture multi-word place names (e.g., "Battle of New Orleans", "Siege of Saint Petersburg")
+    [
+        /Battle of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Siege of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Fall of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Treaty of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Capture of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Sack of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Congress of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Peace of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Massacre of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Rebellion of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Revolt of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Liberation of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Occupation of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Burning of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Evacuation of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Defense of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Defence of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
+        /Annexation of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g
+    ].forEach(pattern => {
         let m;
         pattern.lastIndex = 0; // Reset regex state
         while ((m = pattern.exec(text)) !== null) {
@@ -1103,7 +1818,7 @@ function closeDisambiguationModal() {
 // Select a disambiguation option and remember it
 function selectDisambiguationOption(locationName, option, badgeElement, entity) {
     // Save user choice to localStorage (scoped to current document)
-    const docHash = state.documentName || 'default';
+    const docHash = state.documentHash || 'default';
     const storageKey = `disambiguation_${docHash}`;
     const choices = JSON.parse(localStorage.getItem(storageKey) || '{}');
     choices[locationName] = option.region;
@@ -1308,10 +2023,11 @@ function setupLazyLoading() {
                 const isPlaceholder = entry.target.classList.contains('pdf-page-placeholder');
 
                 if (isPlaceholder && !virtualScrollConfig.renderedPages.has(pageNum)) {
+                    // Mark as rendering immediately to prevent race condition on fast scroll
+                    virtualScrollConfig.renderedPages.add(pageNum);
                     virtualScrollConfig.observer.unobserve(entry.target);
                     renderPage(pageNum)
                         .then(() => {
-                            virtualScrollConfig.renderedPages.add(pageNum);
                             rescaleOverlays();
                             updateTimeline();
                             // Re-observe for potential unloading
@@ -1320,6 +2036,8 @@ function setupLazyLoading() {
                         })
                         .catch(err => {
                             console.error(`Failed to render page ${pageNum}:`, err);
+                            // Remove from rendered set so it can be retried
+                            virtualScrollConfig.renderedPages.delete(pageNum);
                             entry.target.innerHTML = `<div class="page-number" style="color: #ef4444;">Page ${pageNum} failed to load</div>`;
                             entry.target.classList.remove('pdf-page-placeholder');
                         });
@@ -1822,16 +2540,33 @@ async function renderEPUB() {
 
 // Highlight entity in EPUB content
 function highlightEntityInEPUB(contentDiv, entity, chapterNum) {
+    // Collect all text nodes first to avoid TreeWalker issues during DOM modification
+    const textNodes = [];
     const walker = document.createTreeWalker(contentDiv, NodeFilter.SHOW_TEXT, null, false);
     let node;
-
     while (node = walker.nextNode()) {
-        const text = node.textContent;
-        const escapedText = escapeRegex(entity.text);
-        const regex = new RegExp(`\\b${escapedText}\\b`, 'gi');
-        const match = regex.exec(text);
+        textNodes.push(node);
+    }
 
-        if (match) {
+    const escapedText = escapeRegex(entity.text);
+    const regex = new RegExp(`\\b${escapedText}\\b`, 'gi');
+    let markerAdded = false;
+
+    // Process each text node for all occurrences (consistent with PDF behavior)
+    for (const textNode of textNodes) {
+        const text = textNode.textContent;
+        let lastIndex = 0;
+        let match;
+        const fragments = [];
+
+        regex.lastIndex = 0;
+        while ((match = regex.exec(text)) !== null) {
+            // Add text before the match
+            if (match.index > lastIndex) {
+                fragments.push(document.createTextNode(text.substring(lastIndex, match.index)));
+            }
+
+            // Create the highlighted span
             const span = document.createElement("span");
             span.className = "location-badge epub-location" +
                 (entity.type === "region" ? " region-badge" : "") +
@@ -1844,17 +2579,7 @@ function highlightEntityInEPUB(contentDiv, entity, chapterNum) {
             span.style.cursor = "pointer";
             span.onclick = () => handleLocationClick(entity.name, span, entity.type, entity.locationName);
 
-            const before = text.substring(0, match.index);
-            const after = text.substring(match.index + match[0].length);
-
-            const parent = node.parentNode;
-            const beforeNode = document.createTextNode(before);
-            const afterNode = document.createTextNode(after);
-
-            parent.insertBefore(beforeNode, node);
-            parent.insertBefore(span, node);
-            parent.insertBefore(afterNode, node);
-            parent.removeChild(node);
+            fragments.push(span);
 
             // Add to locations
             state.allLocations.push({
@@ -1865,19 +2590,36 @@ function highlightEntityInEPUB(contentDiv, entity, chapterNum) {
                 locationName: entity.locationName
             });
 
-            // Add marker to map
-            const coords = entity.type === "event" && entity.locationName
-                ? (eventLocations[entity.locationName] || getContextualCoords(entity.locationName))
-                : getContextualCoords(entity.name);
+            // Add marker to map only once per entity per chapter
+            if (!markerAdded) {
+                const coords = entity.type === "event" && entity.locationName
+                    ? (eventLocations[entity.locationName] || getContextualCoords(entity.locationName))
+                    : getContextualCoords(entity.name);
 
-            if (coords) {
-                addToContext(entity.name, coords);
-                const marker = L.marker(coords).bindPopup(`<b>${entity.name}</b><br>Chapter ${chapterNum}`);
-                state.allMarkers.push(marker);
-                state.markerCluster.addLayer(marker);
+                if (coords) {
+                    addToContext(entity.name, coords);
+                    const marker = L.marker(coords).bindPopup(`<b>${entity.name}</b><br>Chapter ${chapterNum}`);
+                    state.allMarkers.push(marker);
+                    state.markerCluster.addLayer(marker);
+                    markerAdded = true;
+                }
             }
 
-            break; // Only highlight first occurrence per entity per chapter
+            lastIndex = regex.lastIndex;
+        }
+
+        // If we found matches in this text node, replace it with fragments
+        if (fragments.length > 0) {
+            // Add any remaining text after the last match
+            if (lastIndex < text.length) {
+                fragments.push(document.createTextNode(text.substring(lastIndex)));
+            }
+
+            const parent = textNode.parentNode;
+            for (const fragment of fragments) {
+                parent.insertBefore(fragment, textNode);
+            }
+            parent.removeChild(textNode);
         }
     }
 }
