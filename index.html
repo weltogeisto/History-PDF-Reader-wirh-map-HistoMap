@@ -4,25 +4,50 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ScrollThroughTime - Historical Map Reader</title>
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; img-src 'self' data: https://*.tile.openstreetmap.org https://server.arcgisonline.com https://*.basemaps.cartocdn.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' data:; connect-src 'self' https://*.tile.openstreetmap.org https://server.arcgisonline.com https://*.basemaps.cartocdn.com; worker-src 'self' blob: https://cdnjs.cloudflare.com;"
+  />
 
   <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com" referrerpolicy="no-referrer"></script>
 
   <!-- Feather Icons -->
-  <script src="https://unpkg.com/feather-icons"></script>
+  <script src="https://unpkg.com/feather-icons" referrerpolicy="no-referrer"></script>
 
   <!-- Leaflet -->
   <link
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.css"
+    referrerpolicy="no-referrer"
   />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.js"></script>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.js"
+    referrerpolicy="no-referrer"
+  ></script>
+
+  <!-- Leaflet.Draw -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
+    referrerpolicy="no-referrer"
+  />
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"
+    referrerpolicy="no-referrer"
+  ></script>
 
   <!-- jsPDF (for test PDF) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+    referrerpolicy="no-referrer"
+  ></script>
 
   <!-- PDF.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"
+    referrerpolicy="no-referrer"
+  ></script>
 
   <style>
     /* Reset / base */
@@ -88,6 +113,13 @@
       background: #f9fafb;
       border-bottom: 1px solid #e5e7eb;
     }
+    .page-loading {
+      padding: 2.5rem 1rem;
+      text-align: center;
+      color: #6b7280;
+      font-size: 0.95rem;
+      background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+    }
 
     /* Text overlay / location badges */
     .text-overlay {
@@ -133,6 +165,45 @@
       border-color: rgba(239, 68, 68, 0.75);
       box-shadow: 0 4px 12px rgba(239, 68, 68, 0.45);
       z-index: 15;
+    }
+
+    .map-tools {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 400;
+    }
+    .map-tools button {
+      font-size: 0.75rem;
+      padding: 0.4rem 0.6rem;
+      border-radius: 0.5rem;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+    }
+    .map-tools button:hover {
+      background: #f3f4f6;
+    }
+
+    .map-active-page {
+      font-size: 0.7rem;
+      color: #4b5563;
+      text-align: center;
+      background: #f9fafb;
+      border-radius: 0.5rem;
+      padding: 0.3rem 0.5rem;
+      border: 1px solid #e5e7eb;
+    }
+
+    .focus-ring:focus-visible,
+    button:focus-visible,
+    [role="button"]:focus-visible,
+    #timeline-bar:focus-visible {
+      outline: 3px solid rgba(59, 130, 246, 0.8);
+      outline-offset: 2px;
     }
 
     /* Resize handle */
@@ -238,6 +309,7 @@
           <button
             id="upload-btn"
             class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center text-sm"
+            aria-label="Upload PDF"
           >
             <i data-feather="upload" class="mr-1 w-4 h-4"></i>
             Upload
@@ -245,6 +317,7 @@
           <button
             id="generate-test-pdf"
             class="px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition flex items-center text-sm"
+            aria-label="Generate test PDF"
           >
             <i data-feather="file-text" class="mr-1 w-4 h-4"></i>
             Test
@@ -252,6 +325,7 @@
           <button
             id="auto-map-toggle"
             class="px-3 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 transition text-sm"
+            aria-label="Toggle auto map navigation"
           >
             Auto ON
           </button>
@@ -259,6 +333,12 @@
             type="file"
             id="pdf-input"
             accept=".pdf"
+            class="hidden"
+          />
+          <input
+            type="file"
+            id="trace-import"
+            accept=".json,.geojson,application/geo+json"
             class="hidden"
           />
         </div>
@@ -290,9 +370,26 @@
     <!-- Map -->
     <div
       id="map-container"
-      class="w-full md:w-1/2 h-screen sticky top-16"
+      class="w-full md:w-1/2 h-screen sticky top-16 relative"
     >
       <div id="map"></div>
+      <div class="map-tools">
+        <div class="map-active-page">
+          Trace page: <span id="trace-page-label">1</span>
+        </div>
+        <button id="trace-clear" type="button" class="focus-ring">
+          Clear Page
+        </button>
+        <button id="trace-export-page" type="button" class="focus-ring">
+          Export Page
+        </button>
+        <button id="trace-export-all" type="button" class="focus-ring">
+          Export All
+        </button>
+        <button id="trace-import-btn" type="button" class="focus-ring">
+          Import
+        </button>
+      </div>
     </div>
   </div>
 
@@ -303,6 +400,7 @@
     <button
       id="prev-marker"
       class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition"
+      aria-label="Previous location"
     >
       <i data-feather="chevron-left" class="w-4 h-4"></i>
     </button>
@@ -310,6 +408,12 @@
     <div
       id="timeline-bar"
       class="w-32 md:w-64 h-2 bg-gray-200 rounded-full relative cursor-pointer"
+      tabindex="0"
+      role="slider"
+      aria-label="Location timeline"
+      aria-valuemin="1"
+      aria-valuenow="0"
+      aria-valuemax="0"
     >
       <div
         id="timeline-progress"
@@ -321,12 +425,16 @@
     <button
       id="next-marker"
       class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition"
+      aria-label="Next location"
     >
       <i data-feather="chevron-right" class="w-4 h-4"></i>
     </button>
 
     <span class="text-sm font-medium">
       <span id="marker-counter">0/0</span>
+    </span>
+    <span class="text-xs text-gray-500" id="current-location" aria-live="polite">
+      No location selected
     </span>
   </div>
 
@@ -347,7 +455,18 @@
       isResizing: false,
       activeMapMarker: null,
       activeRegionPolygon: null,
+      locationRegexes: [],
+      pageRenderState: new Map(),
+      pageElements: new Map(),
+      renderObserver: null,
+      visiblePages: new Map(),
+      activePage: 1,
+      pageTraces: new Map(),
+      activeTraceLayer: null,
+      drawControl: null,
     };
+
+    const MAX_PDF_SIZE = 50 * 1024 * 1024;
 
     // Geo database
     const geoDatabase = {
@@ -412,12 +531,102 @@
       },
     };
 
+    function escapeRegex(value) {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function buildLocationRegexes() {
+      const locationNames = new Set([
+        ...Object.keys(geoDatabase),
+        ...Object.keys(regionPolygons),
+      ]);
+      state.locationRegexes = Array.from(locationNames).map((name) => ({
+        name,
+        regex: new RegExp(
+          `(^|\\\\W)(${escapeRegex(name)})(?=\\\\W|$)`,
+          "gi"
+        ),
+      }));
+    }
+
+    function getTraceLayer(pageNum) {
+      if (!state.pageTraces.has(pageNum)) {
+        state.pageTraces.set(pageNum, new L.FeatureGroup());
+      }
+      return state.pageTraces.get(pageNum);
+    }
+
+    function setActiveTracePage(pageNum) {
+      if (!state.map || !pageNum) return;
+      const layer = getTraceLayer(pageNum);
+      if (state.activeTraceLayer && state.map.hasLayer(state.activeTraceLayer)) {
+        state.map.removeLayer(state.activeTraceLayer);
+      }
+      state.activeTraceLayer = layer;
+      if (!state.map.hasLayer(layer)) {
+        state.map.addLayer(layer);
+      }
+
+      if (state.drawControl) {
+        state.map.removeControl(state.drawControl);
+      }
+      state.drawControl = new L.Control.Draw({
+        edit: { featureGroup: layer },
+        draw: {
+          polygon: true,
+          polyline: true,
+          rectangle: true,
+          circle: false,
+          marker: true,
+          circlemarker: false,
+        },
+      });
+      state.map.addControl(state.drawControl);
+      updateTraceStateLabel();
+    }
+
+    function updateTraceStateLabel() {
+      const label = document.getElementById("trace-page-label");
+      if (label) {
+        label.textContent = String(state.activePage || 1);
+      }
+    }
+
+    function setActivePage(pageNum) {
+      if (!pageNum) return;
+      state.activePage = pageNum;
+      setActiveTracePage(pageNum);
+    }
+
     function initMap() {
       state.map = L.map("map").setView([45, 25], 5);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
-        attribution: "© OpenStreetMap",
-      }).addTo(state.map);
+      const baseLayers = {
+        OpenStreetMap: L.tileLayer(
+          "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          {
+            maxZoom: 18,
+            attribution: "© OpenStreetMap",
+          }
+        ),
+        "Esri World Imagery": L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          {
+            maxZoom: 18,
+            attribution: "Tiles © Esri",
+          }
+        ),
+        "Carto Light": L.tileLayer(
+          "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+          {
+            maxZoom: 19,
+            attribution: "© OpenStreetMap © CARTO",
+          }
+        ),
+      };
+      baseLayers.OpenStreetMap.addTo(state.map);
+      L.control.layers(baseLayers, null, { position: "topleft" }).addTo(
+        state.map
+      );
 
       // Add region polygons
       Object.keys(regionPolygons).forEach((name) => {
@@ -433,11 +642,34 @@
         polygon.regionName = name;
         state.regionPolygons.push(polygon);
       });
+
+      initDrawControls();
+    }
+
+    function initDrawControls() {
+      if (!state.map || !L.Control.Draw) return;
+      state.map.on(L.Draw.Event.CREATED, (event) => {
+        if (state.activeTraceLayer) {
+          state.activeTraceLayer.addLayer(event.layer);
+        }
+      });
+      state.map.on(L.Draw.Event.DELETED, () => {
+        updateTraceStateLabel();
+      });
+      setActiveTracePage(state.activePage);
     }
 
     function handleLocationClick(locationName, element) {
+      const regionDef = regionPolygons[locationName];
       const coords = geoDatabase[locationName];
-      if (!coords) return;
+      if (!coords && !regionDef) return;
+      const wrapper = element.closest(".pdf-page-wrapper");
+      if (wrapper) {
+        const pageNum = Number(wrapper.dataset.page);
+        if (pageNum) {
+          setActivePage(pageNum);
+        }
+      }
 
       // Update active badge
       document
@@ -471,7 +703,6 @@
       }
 
       // Handle region polygons vs points
-      const regionDef = regionPolygons[locationName];
       if (regionDef) {
         const poly = state.regionPolygons.find(
           (p) => p.regionName === locationName
@@ -509,119 +740,185 @@
       const container = document.getElementById("pdf-container");
       container.innerHTML = "";
       state.allLocations = [];
+      state.pageRenderState = new Map();
+      state.pageElements = new Map();
+      state.visiblePages = new Map();
+      state.currentLocationIndex = 0;
 
-      console.log("Rendering PDF pages…");
+      if (state.renderObserver) {
+        state.renderObserver.disconnect();
+      }
+
+      const viewer = document.getElementById("pdf-viewer");
+      state.renderObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const pageNum = Number(entry.target.dataset.page);
+            if (entry.isIntersecting) {
+              state.visiblePages.set(pageNum, entry.intersectionRatio);
+              renderPage(pageNum);
+            } else {
+              state.visiblePages.delete(pageNum);
+            }
+          });
+          const sorted = Array.from(state.visiblePages.entries()).sort(
+            (a, b) => b[1] - a[1]
+          );
+          if (sorted.length) {
+            setActivePage(sorted[0][0]);
+          }
+        },
+        {
+          root: viewer,
+          threshold: [0, 0.2, 0.6, 1],
+        }
+      );
+
+      console.log("Preparing PDF pages…");
       for (let pageNum = 1; pageNum <= state.pdfDoc.numPages; pageNum++) {
-        const page = await state.pdfDoc.getPage(pageNum);
-        const scale = 1.5;
-        const viewport = page.getViewport({ scale });
+        state.pageRenderState.set(pageNum, { rendered: false, rendering: false });
 
-        // Page wrapper
         const pageWrapper = document.createElement("div");
         pageWrapper.className = "pdf-page-wrapper";
         pageWrapper.dataset.page = pageNum;
 
-        // Page number
         const pageNumber = document.createElement("div");
         pageNumber.className = "page-number";
         pageNumber.textContent = "Page " + pageNum;
         pageWrapper.appendChild(pageNumber);
 
-        // Canvas container
         const canvasContainer = document.createElement("div");
         canvasContainer.style.position = "relative";
         canvasContainer.style.width = "100%";
 
-        // Canvas
         const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
         canvas.className = "pdf-canvas";
-
-        await page.render({ canvasContext: ctx, viewport }).promise;
         canvasContainer.appendChild(canvas);
 
-        // Text overlay
+        const loading = document.createElement("div");
+        loading.className = "page-loading";
+        loading.textContent = "Loading page…";
+        canvasContainer.appendChild(loading);
+
         const textOverlay = document.createElement("div");
         textOverlay.className = "text-overlay";
+        canvasContainer.appendChild(textOverlay);
 
-        // Ensure overlay matches the rendered (scaled) canvas size
-        const displayScale = canvas.clientWidth / viewport.width;
-        const displayHeight = viewport.height * displayScale;
-        canvasContainer.style.height = displayHeight + "px";
-        textOverlay.style.width = canvas.clientWidth + "px";
-        textOverlay.style.height = displayHeight + "px";
-        textOverlay.dataset.viewportWidth = viewport.width;
-        textOverlay.dataset.viewportHeight = viewport.height;
+        pageWrapper.appendChild(canvasContainer);
+        container.appendChild(pageWrapper);
 
-        const textContent = await page.getTextContent();
+        state.pageElements.set(pageNum, {
+          canvas,
+          canvasContainer,
+          textOverlay,
+          loading,
+        });
 
-        textContent.items.forEach((item) => {
-          const rawText = (item.str || "").trim();
-          if (!rawText) return;
+        state.renderObserver.observe(pageWrapper);
+      }
 
-          const rawTransform = item.transform || [];
-          const transform = pdfjsLib.Util.transform(
-            viewport.transform,
-            rawTransform
-          );
-          const fontHeight = Math.hypot(transform[1] || 0, transform[3] || 0);
-          const textWidthPx = (item.width || 0) * viewport.scale;
-          const leftBase = transform[4] || 0;
-          const topBase = (transform[5] || 0) - fontHeight;
+      updateTimeline();
+      rescaleOverlays();
+    }
 
-          Object.keys(geoDatabase).forEach((location) => {
-            const regex = new RegExp(`\\b${location}\\b`, "gi");
-            const matches = rawText.matchAll(regex);
+    async function renderPage(pageNum) {
+      const renderState = state.pageRenderState.get(pageNum);
+      if (!renderState || renderState.rendered || renderState.rendering) return;
+      renderState.rendering = true;
 
-            Array.from(matches).forEach((match) => {
-              const startIndex = match.index || 0;
-              const wordLength = match[0].length;
-              const textLength = rawText.length || 1;
+      const elements = state.pageElements.get(pageNum);
+      if (!elements) {
+        renderState.rendering = false;
+        return;
+      }
 
-              const startFraction = startIndex / textLength;
-              const widthFraction = wordLength / textLength;
+      const page = await state.pdfDoc.getPage(pageNum);
+      const scale = 1.5;
+      const viewport = page.getViewport({ scale });
+      const { canvas, canvasContainer, textOverlay, loading } = elements;
+      const ctx = canvas.getContext("2d");
 
-              const highlightWidthBase = textWidthPx * widthFraction;
-              const leftOffsetBase = leftBase + textWidthPx * startFraction;
-              const highlightHeightBase = fontHeight || 14;
-              const topOffsetBase = topBase;
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      if (loading) {
+        loading.remove();
+      }
 
-              const highlight = document.createElement("div");
-              highlight.className = "location-badge";
-              highlight.dataset.location = location;
-              highlight.dataset.left = leftOffsetBase;
-              highlight.dataset.top = topOffsetBase;
-              highlight.dataset.width = highlightWidthBase;
-              highlight.dataset.height = highlightHeightBase;
+      const displayWidth = canvas.clientWidth || canvas.width;
+      const displayScale = displayWidth / viewport.width || 1;
+      const displayHeight = viewport.height * displayScale;
+      canvasContainer.style.height = displayHeight + "px";
+      textOverlay.style.width = displayWidth + "px";
+      textOverlay.style.height = displayHeight + "px";
+      textOverlay.dataset.viewportWidth = viewport.width;
+      textOverlay.dataset.viewportHeight = viewport.height;
 
-              highlight.style.left = leftOffsetBase * displayScale + "px";
-              highlight.style.top = topOffsetBase * displayScale + "px";
-              highlight.style.width = highlightWidthBase * displayScale + "px";
-              highlight.style.height = highlightHeightBase * displayScale + "px";
-              highlight.title = "Click to view location on map";
+      const textContent = await page.getTextContent();
+      textOverlay.innerHTML = "";
 
-              highlight.onclick = () => handleLocationClick(location, highlight);
+      textContent.items.forEach((item) => {
+        const rawText = (item.str || "").trim();
+        if (!rawText) return;
 
-              textOverlay.appendChild(highlight);
+        const rawTransform = item.transform || [];
+        const transform = pdfjsLib.Util.transform(
+          viewport.transform,
+          rawTransform
+        );
+        const fontHeight = Math.hypot(transform[1] || 0, transform[3] || 0);
+        const textWidthPx = (item.width || 0) * viewport.scale;
+        const leftBase = transform[4] || 0;
+        const topBase = (transform[5] || 0) - fontHeight;
 
-              // Track for timeline
-              state.allLocations.push({
-                name: location,
-                element: highlight,
-                page: pageNum,
-              });
+        state.locationRegexes.forEach(({ name, regex }) => {
+          const matches = rawText.matchAll(regex);
+          Array.from(matches).forEach((match) => {
+            const startIndex = (match.index || 0) + (match[1] || "").length;
+            const wordLength = match[2].length;
+            const textLength = rawText.length || 1;
+
+            const startFraction = startIndex / textLength;
+            const widthFraction = wordLength / textLength;
+
+            const highlightWidthBase = textWidthPx * widthFraction;
+            const leftOffsetBase = leftBase + textWidthPx * startFraction;
+            const highlightHeightBase = fontHeight || 14;
+            const topOffsetBase = topBase;
+
+            const highlight = document.createElement("div");
+            highlight.className = "location-badge";
+            highlight.dataset.location = name;
+            highlight.dataset.left = leftOffsetBase;
+            highlight.dataset.top = topOffsetBase;
+            highlight.dataset.width = highlightWidthBase;
+            highlight.dataset.height = highlightHeightBase;
+
+            highlight.style.left = leftOffsetBase * displayScale + "px";
+            highlight.style.top = topOffsetBase * displayScale + "px";
+            highlight.style.width = highlightWidthBase * displayScale + "px";
+            highlight.style.height = highlightHeightBase * displayScale + "px";
+            highlight.title = "Click to view location on map";
+
+            highlight.onclick = () => handleLocationClick(name, highlight);
+
+            textOverlay.appendChild(highlight);
+
+            state.allLocations.push({
+              name,
+              element: highlight,
+              page: pageNum,
             });
           });
         });
+      });
 
-        canvasContainer.appendChild(textOverlay);
-        pageWrapper.appendChild(canvasContainer);
-        container.appendChild(pageWrapper);
-      }
-
-      console.log("Total locations found:", state.allLocations.length);
+      renderState.rendered = true;
+      renderState.rendering = false;
+      state.allLocations.sort(
+        (a, b) =>
+          a.page - b.page || a.element.offsetTop - b.element.offsetTop
+      );
       updateTimeline();
       rescaleOverlays();
     }
@@ -629,13 +926,27 @@
     function updateTimeline() {
       const total = state.allLocations.length;
       const counter = document.getElementById("marker-counter");
+      const currentLabel = document.getElementById("current-location");
+      const timelineBar = document.getElementById("timeline-bar");
       counter.textContent =
         (total === 0 ? 0 : state.currentLocationIndex + 1) + "/" + total;
 
       if (total === 0) {
         document.getElementById("timeline-progress").style.width = "0";
+        if (currentLabel) {
+          currentLabel.textContent = "No location selected";
+        }
+        if (timelineBar) {
+          timelineBar.setAttribute("aria-valuenow", "0");
+          timelineBar.setAttribute("aria-valuemax", "0");
+        }
         return;
       }
+
+      state.currentLocationIndex = Math.min(
+        state.currentLocationIndex,
+        total - 1
+      );
 
       const progress =
         (state.currentLocationIndex /
@@ -643,6 +954,19 @@
         100;
       document.getElementById("timeline-progress").style.width =
         progress + "%";
+      if (currentLabel) {
+        const current = state.allLocations[state.currentLocationIndex];
+        currentLabel.textContent = current
+          ? `${current.name} · Page ${current.page}`
+          : "No location selected";
+      }
+      if (timelineBar) {
+        timelineBar.setAttribute(
+          "aria-valuenow",
+          String(state.currentLocationIndex + 1)
+        );
+        timelineBar.setAttribute("aria-valuemax", String(total));
+      }
     }
 
     function rescaleOverlays() {
@@ -681,6 +1005,7 @@
       state.currentLocationIndex = index;
       const location = state.allLocations[index];
 
+      setActivePage(location.page);
       location.element.scrollIntoView({
         behavior: "smooth",
         block: "center",
@@ -708,9 +1033,15 @@
 
         let arrayBuffer;
         if (fileOrBlob instanceof Blob) {
+          if (fileOrBlob.size > MAX_PDF_SIZE) {
+            throw new Error("PDF exceeds the 50MB size limit.");
+          }
           arrayBuffer = await fileOrBlob.arrayBuffer();
         } else {
           // File from input
+          if (fileOrBlob.size > MAX_PDF_SIZE) {
+            throw new Error("PDF exceeds the 50MB size limit.");
+          }
           arrayBuffer = await fileOrBlob.arrayBuffer();
         }
 
@@ -726,6 +1057,12 @@
           .getElementById("pdf-container")
           .classList.remove("hidden");
 
+        if (state.activeTraceLayer && state.map) {
+          state.map.removeLayer(state.activeTraceLayer);
+        }
+        state.pageTraces = new Map();
+        state.activeTraceLayer = null;
+        setActivePage(1);
         await renderAllPages();
       } catch (error) {
         alert("Error loading PDF: " + error.message);
@@ -801,6 +1138,64 @@
 
       const blob = doc.output("blob");
       loadPDF(blob);
+    }
+
+    function downloadJson(payload, filename) {
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportTracePage() {
+      if (!state.activePage) return;
+      const layer = getTraceLayer(state.activePage);
+      const data = layer.toGeoJSON();
+      downloadJson(data, `traces-page-${state.activePage}.geojson`);
+    }
+
+    function exportAllTraces() {
+      const payload = { pages: {} };
+      state.pageTraces.forEach((layer, pageNum) => {
+        payload.pages[pageNum] = layer.toGeoJSON();
+      });
+      downloadJson(payload, "traces-all-pages.json");
+    }
+
+    function applyGeoJsonToPage(pageNum, data) {
+      const layerGroup = getTraceLayer(pageNum);
+      L.geoJSON(data).eachLayer((layer) => {
+        layerGroup.addLayer(layer);
+      });
+      if (pageNum === state.activePage) {
+        setActiveTracePage(pageNum);
+      }
+    }
+
+    function importTraces(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (data.pages && typeof data.pages === "object") {
+            Object.keys(data.pages).forEach((pageKey) => {
+              applyGeoJsonToPage(Number(pageKey), data.pages[pageKey]);
+            });
+          } else {
+            applyGeoJsonToPage(state.activePage || 1, data);
+          }
+        } catch (error) {
+          alert("Invalid trace file: " + error.message);
+        }
+      };
+      reader.readAsText(file);
     }
 
     function initResizer() {
@@ -888,7 +1283,13 @@
       .getElementById("pdf-input")
       .addEventListener("change", (e) => {
         const file = e.target.files && e.target.files[0];
-        if (file) loadPDF(file);
+        if (!file) return;
+        if (file.size > MAX_PDF_SIZE) {
+          alert("PDF exceeds the 50MB size limit.");
+          e.target.value = "";
+          return;
+        }
+        loadPDF(file);
       });
 
     document
@@ -936,12 +1337,62 @@
       });
 
     document
+      .getElementById("timeline-bar")
+      .addEventListener("keydown", (e) => {
+        if (!state.allLocations.length) return;
+        if (e.key === "ArrowLeft") {
+          navigateToLocation(Math.max(state.currentLocationIndex - 1, 0));
+          e.preventDefault();
+        }
+        if (e.key === "ArrowRight") {
+          navigateToLocation(
+            Math.min(
+              state.currentLocationIndex + 1,
+              state.allLocations.length - 1
+            )
+          );
+          e.preventDefault();
+        }
+      });
+
+    document
+      .getElementById("trace-clear")
+      .addEventListener("click", () => {
+        if (!state.activeTraceLayer) return;
+        state.activeTraceLayer.clearLayers();
+      });
+
+    document
+      .getElementById("trace-export-page")
+      .addEventListener("click", exportTracePage);
+
+    document
+      .getElementById("trace-export-all")
+      .addEventListener("click", exportAllTraces);
+
+    document
+      .getElementById("trace-import-btn")
+      .addEventListener("click", () =>
+        document.getElementById("trace-import").click()
+      );
+
+    document
+      .getElementById("trace-import")
+      .addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        importTraces(file);
+        e.target.value = "";
+      });
+
+    document
       .getElementById("pdf-viewer")
       .addEventListener("scroll", updateReadingProgress);
 
     window.addEventListener("resize", rescaleOverlays);
 
     // Init
+    buildLocationRegexes();
     initMap();
     initResizer();
     feather.replace();
