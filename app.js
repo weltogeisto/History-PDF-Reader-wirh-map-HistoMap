@@ -3232,6 +3232,10 @@ async function init() {
         } else {
             loadPDF(new Blob([cached], { type: "application/pdf" }), cachedName);
         }
+    } else if (typeof generateDefaultDocumentPDF === 'function') {
+        // No cached document — load the bundled default document
+        const defaultBlob = generateDefaultDocumentPDF();
+        loadPDF(defaultBlob, DEFAULT_DOCUMENT_TITLE + '.pdf');
     }
 }
 init();
