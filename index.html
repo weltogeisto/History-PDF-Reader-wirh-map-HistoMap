@@ -17,6 +17,11 @@
     href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.css"
   />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.3/leaflet.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
+  />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
   <!-- jsPDF (for test PDF) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -255,10 +260,40 @@
           >
             Auto ON
           </button>
+          <button
+            id="clear-page"
+            class="px-3 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition text-sm"
+          >
+            Clear Page
+          </button>
+          <button
+            id="export-page"
+            class="px-3 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 transition text-sm"
+          >
+            Export Page
+          </button>
+          <button
+            id="export-all"
+            class="px-3 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition text-sm"
+          >
+            Export All
+          </button>
+          <button
+            id="import-geojson"
+            class="px-3 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition text-sm"
+          >
+            Import
+          </button>
           <input
             type="file"
             id="pdf-input"
             accept=".pdf"
+            class="hidden"
+          />
+          <input
+            type="file"
+            id="geojson-input"
+            accept=".json,.geojson,application/json"
             class="hidden"
           />
         </div>
@@ -347,6 +382,10 @@
       isResizing: false,
       activeMapMarker: null,
       activeRegionPolygon: null,
+      pageTraces: new Map(),
+      activePageNumber: 1,
+      drawControl: null,
+      activeTraceGroup: null,
     };
 
     // Geo database
@@ -419,6 +458,10 @@
         attribution: "© OpenStreetMap",
       }).addTo(state.map);
 
+      ensurePageTraceGroup(1);
+      setActivePage(1);
+      attachDrawControls();
+
       // Add region polygons
       Object.keys(regionPolygons).forEach((name) => {
         const region = regionPolygons[name];
@@ -433,6 +476,136 @@
         polygon.regionName = name;
         state.regionPolygons.push(polygon);
       });
+    }
+
+    function ensurePageTraceGroup(pageNumber) {
+      if (!state.pageTraces.has(pageNumber)) {
+        const group = new L.FeatureGroup();
+        state.pageTraces.set(pageNumber, group);
+      }
+      return state.pageTraces.get(pageNumber);
+    }
+
+    function setActivePage(pageNumber) {
+      const nextPage = Number(pageNumber) || 1;
+      if (state.activePageNumber === nextPage && state.activeTraceGroup) {
+        return;
+      }
+      const nextGroup = ensurePageTraceGroup(nextPage);
+      if (state.activeTraceGroup && state.map) {
+        state.map.removeLayer(state.activeTraceGroup);
+      }
+      state.activeTraceGroup = nextGroup;
+      state.activePageNumber = nextPage;
+      if (state.map) {
+        state.activeTraceGroup.addTo(state.map);
+      }
+      attachDrawControls();
+    }
+
+    function attachDrawControls() {
+      if (!state.map || !state.activeTraceGroup) return;
+      if (state.drawControl) {
+        state.map.removeControl(state.drawControl);
+      }
+      state.drawControl = new L.Control.Draw({
+        edit: {
+          featureGroup: state.activeTraceGroup,
+        },
+        draw: {
+          polygon: true,
+          polyline: true,
+          rectangle: true,
+          circle: false,
+          marker: true,
+          circlemarker: false,
+        },
+      });
+      state.map.addControl(state.drawControl);
+
+      state.map.off("draw:created");
+      state.map.off("draw:edited");
+      state.map.off("draw:deleted");
+
+      state.map.on("draw:created", (event) => {
+        if (!state.activeTraceGroup) return;
+        state.activeTraceGroup.addLayer(event.layer);
+      });
+
+      state.map.on("draw:edited", (event) => {
+        if (!state.activeTraceGroup) return;
+        event.layers.eachLayer((layer) => {
+          if (!state.activeTraceGroup.hasLayer(layer)) {
+            state.activeTraceGroup.addLayer(layer);
+          }
+        });
+      });
+
+      state.map.on("draw:deleted", (event) => {
+        if (!state.activeTraceGroup) return;
+        event.layers.eachLayer((layer) => {
+          if (state.activeTraceGroup.hasLayer(layer)) {
+            state.activeTraceGroup.removeLayer(layer);
+          }
+        });
+      });
+    }
+
+    function getActiveTraceGroup() {
+      return ensurePageTraceGroup(state.activePageNumber);
+    }
+
+    function exportTraceGroup(group) {
+      if (!group) return null;
+      return group.toGeoJSON();
+    }
+
+    function downloadGeoJSON(data, filename) {
+      if (!data) return;
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function importGeoJSONToActivePage(geojson) {
+      if (!geojson) return;
+      const group = getActiveTraceGroup();
+      const layer = L.geoJSON(geojson);
+      layer.eachLayer((item) => {
+        group.addLayer(item);
+      });
+    }
+
+    function updateActivePageFromScroll() {
+      const viewer = document.getElementById("pdf-viewer");
+      if (!viewer) return;
+      const wrappers = Array.from(
+        document.querySelectorAll(".pdf-page-wrapper")
+      );
+      if (!wrappers.length) return;
+      const viewerRect = viewer.getBoundingClientRect();
+      const targetY = viewerRect.top + viewerRect.height / 2;
+      let closest = wrappers[0];
+      let closestDistance = Infinity;
+
+      wrappers.forEach((wrapper) => {
+        const rect = wrapper.getBoundingClientRect();
+        const distance = Math.abs(rect.top + rect.height / 2 - targetY);
+        if (distance < closestDistance) {
+          closest = wrapper;
+          closestDistance = distance;
+        }
+      });
+
+      const pageNumber = Number(closest.dataset.page) || 1;
+      setActivePage(pageNumber);
     }
 
     function handleLocationClick(locationName, element) {
@@ -509,6 +682,7 @@
       const container = document.getElementById("pdf-container");
       container.innerHTML = "";
       state.allLocations = [];
+      state.pageTraces = new Map();
 
       console.log("Rendering PDF pages…");
       for (let pageNum = 1; pageNum <= state.pdfDoc.numPages; pageNum++) {
@@ -520,6 +694,11 @@
         const pageWrapper = document.createElement("div");
         pageWrapper.className = "pdf-page-wrapper";
         pageWrapper.dataset.page = pageNum;
+        pageWrapper.addEventListener("click", () => {
+          setActivePage(pageNum);
+        });
+
+        ensurePageTraceGroup(pageNum);
 
         // Page number
         const pageNumber = document.createElement("div");
@@ -624,6 +803,7 @@
       console.log("Total locations found:", state.allLocations.length);
       updateTimeline();
       rescaleOverlays();
+      updateActivePageFromScroll();
     }
 
     function updateTimeline() {
@@ -905,6 +1085,58 @@
       });
 
     document
+      .getElementById("clear-page")
+      .addEventListener("click", () => {
+        const group = getActiveTraceGroup();
+        group.clearLayers();
+      });
+
+    document
+      .getElementById("export-page")
+      .addEventListener("click", () => {
+        const group = getActiveTraceGroup();
+        const data = exportTraceGroup(group);
+        downloadGeoJSON(
+          data,
+          `page-${state.activePageNumber}-traces.geojson`
+        );
+      });
+
+    document
+      .getElementById("export-all")
+      .addEventListener("click", () => {
+        const payload = {};
+        Array.from(state.pageTraces.entries()).forEach(
+          ([pageNumber, group]) => {
+            payload[pageNumber] = exportTraceGroup(group);
+          }
+        );
+        downloadGeoJSON(payload, "all-pages-traces.geojson");
+      });
+
+    document
+      .getElementById("import-geojson")
+      .addEventListener("click", () =>
+        document.getElementById("geojson-input").click()
+      );
+
+    document
+      .getElementById("geojson-input")
+      .addEventListener("change", async (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const geojson = JSON.parse(text);
+          importGeoJSONToActivePage(geojson);
+        } catch (error) {
+          alert("Error importing GeoJSON: " + error.message);
+        } finally {
+          event.target.value = "";
+        }
+      });
+
+    document
       .getElementById("prev-marker")
       .addEventListener("click", () => {
         if (state.currentLocationIndex > 0) {
@@ -937,7 +1169,10 @@
 
     document
       .getElementById("pdf-viewer")
-      .addEventListener("scroll", updateReadingProgress);
+      .addEventListener("scroll", () => {
+        updateReadingProgress();
+        updateActivePageFromScroll();
+      });
 
     window.addEventListener("resize", rescaleOverlays);
 
