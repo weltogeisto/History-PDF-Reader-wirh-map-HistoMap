@@ -281,6 +281,10 @@
         <h3 class="text-xl font-medium">No PDF Loaded</h3>
         <p class="mt-2">Upload a PDF or click Test to begin</p>
       </div>
+      <div
+        id="page-limit-warning"
+        class="hidden mx-4 mt-4 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800"
+      ></div>
       <div id="pdf-container" class="pdf-container hidden"></div>
     </div>
 
@@ -347,7 +351,11 @@
       isResizing: false,
       activeMapMarker: null,
       activeRegionPolygon: null,
+      pageRenderState: new Map(),
+      pageCache: new Map(),
+      pageObserver: null,
     };
+    const MAX_PAGES = 75;
 
     // Geo database
     const geoDatabase = {
@@ -505,13 +513,154 @@
       }
     }
 
+    async function renderPage(pageNum, pageWrapper) {
+      const currentState = state.pageRenderState.get(pageNum);
+      if (currentState === "rendering" || currentState === "done") {
+        return;
+      }
+      state.pageRenderState.set(pageNum, "rendering");
+
+      const page = await state.pdfDoc.getPage(pageNum);
+      const scale = 1.5;
+      const viewport = page.getViewport({ scale });
+
+      const canvas = pageWrapper.querySelector("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      const canvasContainer = canvas.parentElement;
+      const displayScale = canvas.clientWidth / viewport.width;
+      const displayHeight = viewport.height * displayScale;
+      canvasContainer.style.height = displayHeight + "px";
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const textOverlay = document.createElement("div");
+      textOverlay.className = "text-overlay";
+      textOverlay.style.width = canvas.clientWidth + "px";
+      textOverlay.style.height = displayHeight + "px";
+      textOverlay.dataset.viewportWidth = viewport.width;
+      textOverlay.dataset.viewportHeight = viewport.height;
+
+      const textContent = await page.getTextContent();
+
+      textContent.items.forEach((item) => {
+        const rawText = (item.str || "").trim();
+        if (!rawText) return;
+
+        const rawTransform = item.transform || [];
+        const transform = pdfjsLib.Util.transform(
+          viewport.transform,
+          rawTransform
+        );
+        const fontHeight = Math.hypot(transform[1] || 0, transform[3] || 0);
+        const textWidthPx = (item.width || 0) * viewport.scale;
+        const leftBase = transform[4] || 0;
+        const topBase = (transform[5] || 0) - fontHeight;
+
+        Object.keys(geoDatabase).forEach((location) => {
+          const regex = new RegExp(`\\b${location}\\b`, "gi");
+          const matches = rawText.matchAll(regex);
+
+          Array.from(matches).forEach((match) => {
+            const startIndex = match.index || 0;
+            const wordLength = match[0].length;
+            const textLength = rawText.length || 1;
+
+            const startFraction = startIndex / textLength;
+            const widthFraction = wordLength / textLength;
+
+            const highlightWidthBase = textWidthPx * widthFraction;
+            const leftOffsetBase = leftBase + textWidthPx * startFraction;
+            const highlightHeightBase = fontHeight || 14;
+            const topOffsetBase = topBase;
+
+            const highlight = document.createElement("div");
+            highlight.className = "location-badge";
+            highlight.dataset.location = location;
+            highlight.dataset.left = leftOffsetBase;
+            highlight.dataset.top = topOffsetBase;
+            highlight.dataset.width = highlightWidthBase;
+            highlight.dataset.height = highlightHeightBase;
+
+            highlight.style.left = leftOffsetBase * displayScale + "px";
+            highlight.style.top = topOffsetBase * displayScale + "px";
+            highlight.style.width = highlightWidthBase * displayScale + "px";
+            highlight.style.height = highlightHeightBase * displayScale + "px";
+            highlight.title = "Click to view location on map";
+
+            highlight.onclick = () => handleLocationClick(location, highlight);
+
+            textOverlay.appendChild(highlight);
+
+            // Track for timeline
+            state.allLocations.push({
+              name: location,
+              element: highlight,
+              page: pageNum,
+            });
+          });
+        });
+      });
+
+      canvasContainer.appendChild(textOverlay);
+      state.pageRenderState.set(pageNum, "done");
+      state.pageCache.set(pageNum, { canvas, textOverlay, viewport });
+
+      updateTimeline();
+      rescaleOverlays();
+    }
+
+    function initializePageObserver() {
+      if (state.pageObserver) {
+        state.pageObserver.disconnect();
+      }
+      const viewer = document.getElementById("pdf-viewer");
+      state.pageObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            const wrapper = entry.target;
+            const pageNum = Number(wrapper.dataset.page);
+            renderPage(pageNum, wrapper).then(() => {
+              if (state.pageObserver) {
+                state.pageObserver.unobserve(wrapper);
+              }
+            });
+          });
+        },
+        {
+          root: viewer,
+          rootMargin: "200px 0px",
+          threshold: 0.1,
+        }
+      );
+    }
+
     async function renderAllPages() {
       const container = document.getElementById("pdf-container");
+      const warning = document.getElementById("page-limit-warning");
       container.innerHTML = "";
       state.allLocations = [];
+      state.currentLocationIndex = 0;
+      state.pageRenderState = new Map();
+      state.pageCache = new Map();
 
-      console.log("Rendering PDF pages…");
-      for (let pageNum = 1; pageNum <= state.pdfDoc.numPages; pageNum++) {
+      initializePageObserver();
+
+      const totalPages = state.pdfDoc.numPages;
+      const pagesToRender = Math.min(totalPages, MAX_PAGES);
+      if (totalPages > MAX_PAGES) {
+        warning.textContent = `This PDF has ${totalPages} pages. Rendering is capped at ${MAX_PAGES} pages to keep the viewer responsive.`;
+        warning.classList.remove("hidden");
+      } else {
+        warning.textContent = "";
+        warning.classList.add("hidden");
+      }
+
+      console.log("Preparing PDF page placeholders…");
+      for (let pageNum = 1; pageNum <= pagesToRender; pageNum++) {
         const page = await state.pdfDoc.getPage(pageNum);
         const scale = 1.5;
         const viewport = page.getViewport({ scale });
@@ -520,6 +669,8 @@
         const pageWrapper = document.createElement("div");
         pageWrapper.className = "pdf-page-wrapper";
         pageWrapper.dataset.page = pageNum;
+        pageWrapper.dataset.viewportWidth = viewport.width;
+        pageWrapper.dataset.viewportHeight = viewport.height;
 
         // Page number
         const pageNumber = document.createElement("div");
@@ -534,96 +685,21 @@
 
         // Canvas
         const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         canvas.className = "pdf-canvas";
-
-        await page.render({ canvasContext: ctx, viewport }).promise;
         canvasContainer.appendChild(canvas);
 
-        // Text overlay
-        const textOverlay = document.createElement("div");
-        textOverlay.className = "text-overlay";
-
-        // Ensure overlay matches the rendered (scaled) canvas size
-        const displayScale = canvas.clientWidth / viewport.width;
-        const displayHeight = viewport.height * displayScale;
-        canvasContainer.style.height = displayHeight + "px";
-        textOverlay.style.width = canvas.clientWidth + "px";
-        textOverlay.style.height = displayHeight + "px";
-        textOverlay.dataset.viewportWidth = viewport.width;
-        textOverlay.dataset.viewportHeight = viewport.height;
-
-        const textContent = await page.getTextContent();
-
-        textContent.items.forEach((item) => {
-          const rawText = (item.str || "").trim();
-          if (!rawText) return;
-
-          const rawTransform = item.transform || [];
-          const transform = pdfjsLib.Util.transform(
-            viewport.transform,
-            rawTransform
-          );
-          const fontHeight = Math.hypot(transform[1] || 0, transform[3] || 0);
-          const textWidthPx = (item.width || 0) * viewport.scale;
-          const leftBase = transform[4] || 0;
-          const topBase = (transform[5] || 0) - fontHeight;
-
-          Object.keys(geoDatabase).forEach((location) => {
-            const regex = new RegExp(`\\b${location}\\b`, "gi");
-            const matches = rawText.matchAll(regex);
-
-            Array.from(matches).forEach((match) => {
-              const startIndex = match.index || 0;
-              const wordLength = match[0].length;
-              const textLength = rawText.length || 1;
-
-              const startFraction = startIndex / textLength;
-              const widthFraction = wordLength / textLength;
-
-              const highlightWidthBase = textWidthPx * widthFraction;
-              const leftOffsetBase = leftBase + textWidthPx * startFraction;
-              const highlightHeightBase = fontHeight || 14;
-              const topOffsetBase = topBase;
-
-              const highlight = document.createElement("div");
-              highlight.className = "location-badge";
-              highlight.dataset.location = location;
-              highlight.dataset.left = leftOffsetBase;
-              highlight.dataset.top = topOffsetBase;
-              highlight.dataset.width = highlightWidthBase;
-              highlight.dataset.height = highlightHeightBase;
-
-              highlight.style.left = leftOffsetBase * displayScale + "px";
-              highlight.style.top = topOffsetBase * displayScale + "px";
-              highlight.style.width = highlightWidthBase * displayScale + "px";
-              highlight.style.height = highlightHeightBase * displayScale + "px";
-              highlight.title = "Click to view location on map";
-
-              highlight.onclick = () => handleLocationClick(location, highlight);
-
-              textOverlay.appendChild(highlight);
-
-              // Track for timeline
-              state.allLocations.push({
-                name: location,
-                element: highlight,
-                page: pageNum,
-              });
-            });
-          });
-        });
-
-        canvasContainer.appendChild(textOverlay);
         pageWrapper.appendChild(canvasContainer);
         container.appendChild(pageWrapper);
+
+        if (state.pageObserver) {
+          state.pageObserver.observe(pageWrapper);
+        }
       }
 
-      console.log("Total locations found:", state.allLocations.length);
+      requestAnimationFrame(rescaleOverlays);
       updateTimeline();
-      rescaleOverlays();
     }
 
     function updateTimeline() {
@@ -651,28 +727,37 @@
         const overlay = wrapper.querySelector(".text-overlay");
         const canvasContainer = canvas?.parentElement;
 
-        if (!canvas || !overlay || !canvasContainer) return;
+        if (!canvas || !canvasContainer) return;
 
-        const viewportWidth = Number(overlay.dataset.viewportWidth) || 1;
-        const viewportHeight = Number(overlay.dataset.viewportHeight) || 1;
+        const viewportWidth =
+          Number(overlay?.dataset.viewportWidth) ||
+          Number(wrapper.dataset.viewportWidth) ||
+          1;
+        const viewportHeight =
+          Number(overlay?.dataset.viewportHeight) ||
+          Number(wrapper.dataset.viewportHeight) ||
+          1;
         const displayScale = canvas.clientWidth / viewportWidth;
         const displayHeight = viewportHeight * displayScale;
 
-        overlay.style.width = canvas.clientWidth + "px";
-        overlay.style.height = displayHeight + "px";
         canvasContainer.style.height = displayHeight + "px";
 
-        overlay.querySelectorAll(".location-badge").forEach((badge) => {
-          const left = Number(badge.dataset.left) || 0;
-          const top = Number(badge.dataset.top) || 0;
-          const width = Number(badge.dataset.width) || 0;
-          const height = Number(badge.dataset.height) || 0;
+        if (overlay) {
+          overlay.style.width = canvas.clientWidth + "px";
+          overlay.style.height = displayHeight + "px";
 
-          badge.style.left = left * displayScale + "px";
-          badge.style.top = top * displayScale + "px";
-          badge.style.width = width * displayScale + "px";
-          badge.style.height = height * displayScale + "px";
-        });
+          overlay.querySelectorAll(".location-badge").forEach((badge) => {
+            const left = Number(badge.dataset.left) || 0;
+            const top = Number(badge.dataset.top) || 0;
+            const width = Number(badge.dataset.width) || 0;
+            const height = Number(badge.dataset.height) || 0;
+
+            badge.style.left = left * displayScale + "px";
+            badge.style.top = top * displayScale + "px";
+            badge.style.width = width * displayScale + "px";
+            badge.style.height = height * displayScale + "px";
+          });
+        }
       });
     }
 
