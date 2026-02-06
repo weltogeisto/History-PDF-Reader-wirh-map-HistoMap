@@ -170,66 +170,155 @@ const overlayLayerDefs = {
         name: "Narrative Focus",
         // Heatmap showing intensity of location mentions in the text
         layer: () => {
-            // Count mentions per location
+            // Count mentions per location, trying multiple name forms
             const mentionCounts = {};
             state.allLocations.forEach(loc => {
-                const name = loc.name;
+                // For events, count by locationName so "Battle of X" groups with "X"
+                const name = loc.locationName || loc.name;
                 mentionCounts[name] = (mentionCounts[name] || 0) + 1;
             });
-            // Create heatmap points with intensity based on mention count
-            const heatPoints = [];
-            const maxMentions = Math.max(...Object.values(mentionCounts), 1);
+            // Resolve coordinates: try getContextualCoords, then eventLocations, then geoDatabase directly
+            const resolvedLocations = [];
             Object.entries(mentionCounts).forEach(([name, count]) => {
-                const coords = getContextualCoords(name);
+                const coords = getContextualCoords(name) || eventLocations[name] || null;
                 if (coords) {
-                    // Intensity ranges from 0.3 to 1.0 based on mention frequency
-                    const intensity = 0.3 + (count / maxMentions) * 0.7;
-                    heatPoints.push([coords[0], coords[1], intensity]);
+                    resolvedLocations.push({ name, count, coords });
                 }
             });
-            return L.heatLayer(heatPoints, {
+            if (resolvedLocations.length === 0) {
+                showToast('Focus layer: No locations with coordinates found in this document', 'info');
+                return L.layerGroup();
+            }
+            const maxMentions = Math.max(...resolvedLocations.map(l => l.count), 1);
+            // Build a layer group with heatmap + labeled circle markers
+            const group = L.layerGroup();
+            const heatPoints = resolvedLocations.map(l => {
+                const intensity = 0.3 + (l.count / maxMentions) * 0.7;
+                return [l.coords[0], l.coords[1], intensity];
+            });
+            group.addLayer(L.heatLayer(heatPoints, {
                 radius: 40,
                 blur: 25,
                 maxZoom: 10,
                 max: 1.0,
                 gradient: { 0.2: '#3b82f6', 0.5: '#8b5cf6', 0.8: '#ec4899', 1: '#f43f5e' }
+            }));
+            // Add small labeled markers so users see what locations are represented
+            resolvedLocations.forEach(l => {
+                const radius = 4 + Math.min((l.count / maxMentions) * 12, 12);
+                const marker = L.circleMarker(l.coords, {
+                    radius: radius,
+                    color: '#8b5cf6',
+                    fillColor: '#8b5cf6',
+                    fillOpacity: 0.3,
+                    weight: 1
+                });
+                marker.bindTooltip(`${l.name}: ${l.count} mention${l.count > 1 ? 's' : ''}`, { direction: 'top' });
+                group.addLayer(marker);
             });
+            return group;
         }
     },
     terrain: {
         name: "Terrain & Elevation",
-        // Using shaded relief to show topography - this one is actually useful
-        layer: () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 13,
-            opacity: 0.5,
-            attribution: '© Esri',
-            className: 'overlay-terrain'
-        })
+        // Full terrain layer that replaces the base map temporarily for clear topographic context
+        layer: () => {
+            const group = L.layerGroup();
+            // Esri World Topo shows terrain with labels and shading
+            group.addLayer(L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 18,
+                opacity: 0.85,
+                attribution: '© Esri',
+                className: 'overlay-terrain'
+            }));
+            // Shaded relief on top for pronounced elevation
+            group.addLayer(L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 13,
+                opacity: 0.35,
+                attribution: '© Esri'
+            }));
+            return group;
+        }
     },
     geopolitical: {
         name: "Theaters of Conflict",
         // Heatmap showing concentration of battles, sieges, and military events
         layer: () => {
-            // Extract coordinates from event-type locations
-            const eventPoints = state.allLocations
+            // Collect explicit event-type locations from NER
+            const conflictCounts = {};
+            state.allLocations
                 .filter(loc => loc.type === 'event')
-                .map(loc => {
-                    const coords = getContextualCoords(loc.locationName || loc.name);
-                    // Higher intensity for events (battles are important)
-                    return coords ? [coords[0], coords[1], 0.85] : null;
-                })
-                .filter(p => p !== null);
-            // If no events found, show a message layer
-            if (eventPoints.length === 0) {
-                return L.layerGroup(); // Empty layer if no events
+                .forEach(loc => {
+                    const locName = loc.locationName || loc.name;
+                    const coords = getContextualCoords(locName) || eventLocations[locName];
+                    if (coords) {
+                        const key = `${coords[0]},${coords[1]}`;
+                        if (!conflictCounts[key]) conflictCounts[key] = { coords, names: new Set(), count: 0 };
+                        conflictCounts[key].names.add(loc.name);
+                        conflictCounts[key].count++;
+                    }
+                });
+            // Also scan all locations that appear near conflict keywords in surrounding text
+            // This catches "the battle near Paris" or "fighting at Berlin" patterns
+            const conflictKeywords = /\b(battle|siege|assault|attack|campaign|war|fought|captured|fell|besieged|bombard|invasion|retreat|surrender|massacre|revolt|rebellion|sacked|burned|occupied|liberated|defeated|victory|skirmish|raid|ambush|offensive|defense|defence|resistance|artillery|cavalry|infantry|troops|army|armies|regiment|fleet|naval)\b/i;
+            const viewer = document.getElementById('pdf-viewer');
+            if (viewer) {
+                const pageTexts = viewer.querySelectorAll('.page-text, .textLayer');
+                pageTexts.forEach(pageEl => {
+                    const text = pageEl.textContent || '';
+                    // Split into sentences and check each for conflict keywords + known locations
+                    const sentences = text.split(/[.!?;]\s+/);
+                    sentences.forEach(sentence => {
+                        if (!conflictKeywords.test(sentence)) return;
+                        // Check if any known locations appear in this conflict sentence
+                        state.allLocations.forEach(loc => {
+                            if (loc.type === 'event') return; // Already counted above
+                            if (sentence.includes(loc.name)) {
+                                const coords = getContextualCoords(loc.name) || eventLocations[loc.name];
+                                if (coords) {
+                                    const key = `${coords[0]},${coords[1]}`;
+                                    if (!conflictCounts[key]) conflictCounts[key] = { coords, names: new Set(), count: 0 };
+                                    conflictCounts[key].names.add(loc.name);
+                                    conflictCounts[key].count++;
+                                }
+                            }
+                        });
+                    });
+                });
             }
-            return L.heatLayer(eventPoints, {
+            const entries = Object.values(conflictCounts);
+            if (entries.length === 0) {
+                showToast('Conflict layer: No military events or conflict references found in this document', 'info');
+                return L.layerGroup();
+            }
+            const maxCount = Math.max(...entries.map(e => e.count), 1);
+            const group = L.layerGroup();
+            // Build heatmap with variable intensity
+            const heatPoints = entries.map(e => {
+                const intensity = 0.3 + (e.count / maxCount) * 0.7;
+                return [e.coords[0], e.coords[1], intensity];
+            });
+            group.addLayer(L.heatLayer(heatPoints, {
                 radius: 35,
                 blur: 20,
                 maxZoom: 12,
                 max: 1.0,
                 gradient: { 0.3: '#22c55e', 0.5: '#eab308', 0.7: '#f97316', 1: '#ef4444' }
+            }));
+            // Add crossed-swords markers with tooltips
+            entries.forEach(e => {
+                const names = [...e.names].join(', ');
+                const marker = L.circleMarker(e.coords, {
+                    radius: 5 + Math.min((e.count / maxCount) * 10, 10),
+                    color: '#ef4444',
+                    fillColor: '#f97316',
+                    fillOpacity: 0.4,
+                    weight: 1.5
+                });
+                marker.bindTooltip(`⚔️ ${names} (${e.count} ref${e.count > 1 ? 's' : ''})`, { direction: 'top' });
+                group.addLayer(marker);
             });
+            return group;
         }
     },
     borders: {
@@ -1685,35 +1774,27 @@ function extractEntitiesForPage(text) {
     });
 
     // Step 2: Find event-based matches (Battle of, Siege of, etc.)
-    // Patterns now capture multi-word place names (e.g., "Battle of New Orleans", "Siege of Saint Petersburg")
-    [
-        /Battle of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Siege of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Fall of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Treaty of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Capture of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Sack of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Congress of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Peace of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Massacre of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Rebellion of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Revolt of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Liberation of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Occupation of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Burning of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Evacuation of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Defense of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Defence of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g,
-        /Annexation of ((?:[A-Z][a-z]+(?:\s+|-)?)+(?: (?:the )?[A-Z][a-z]+)?)/g
-    ].forEach(pattern => {
+    // Case-insensitive patterns capture multi-word place names (e.g., "battle of New Orleans", "SIEGE OF PARIS")
+    const eventPrefixes = [
+        'Battle', 'Siege', 'Fall', 'Treaty', 'Capture', 'Sack', 'Congress',
+        'Peace', 'Massacre', 'Rebellion', 'Revolt', 'Liberation', 'Occupation',
+        'Burning', 'Evacuation', 'Defense', 'Defence', 'Annexation',
+        'Conquest', 'Surrender', 'Bombardment', 'Destruction', 'Raid',
+        'Invasion', 'Campaign', 'Assault', 'Ambush', 'Skirmish'
+    ];
+    eventPrefixes.map(prefix =>
+        new RegExp(prefix + ' of ((?:[A-Z][a-zà-ÿ]+(?:\\s+|-)?)+(?:\\s+(?:the\\s+)?[A-Z][a-zà-ÿ]+)?)', 'gi')
+    ).forEach(pattern => {
         let m;
         pattern.lastIndex = 0; // Reset regex state
         while ((m = pattern.exec(text)) !== null) {
+            // Trim trailing whitespace from captured location name
+            const locationName = m[1].trim();
             candidateMatches.push({
                 text: m[0],
                 type: "event",
                 name: m[0],
-                locationName: m[1],
+                locationName: locationName,
                 index: m.index,
                 length: m[0].length
             });
