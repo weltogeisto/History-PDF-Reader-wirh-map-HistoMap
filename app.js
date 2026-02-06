@@ -44,7 +44,11 @@ const state = {
     overlayLayers: {}, // Track active overlay layers
     documentHash: null, // Hash of current document for annotation storage
     userAnnotations: [], // User-added annotations
-    regionsVisible: false // Whether region polygons are visible
+    regionsVisible: false, // Whether region polygons are visible
+    disambiguationModalOpen: false,
+    disambiguationTimer: null,
+    heatmapWarningShown: false,
+    persistenceWarningShown: false
 };
 
 // Document library database
@@ -82,6 +86,38 @@ async function loadAnnotations(hash) {
         return await annotationDB.getItem(hash);
     } catch (e) {
         console.warn('Failed to load annotations:', e);
+        return null;
+    }
+}
+
+function cloneArrayBuffer(buffer) {
+    if (!(buffer instanceof ArrayBuffer)) return buffer;
+    if (buffer.byteLength === 0) return null;
+    return buffer.slice(0);
+}
+
+async function persistArrayBuffer(storage, key, buffer, label) {
+    const cloned = cloneArrayBuffer(buffer);
+    if (!cloned) {
+        console.warn(`Skipping persistence for ${label}: empty or detached buffer.`);
+        return null;
+    }
+    try {
+        return await storage.setItem(key, cloned);
+    } catch (e) {
+        if (e && e.name === 'DataCloneError') {
+            console.warn(`DataCloneError while saving ${label}.`, e);
+            if (!state.persistenceWarningShown) {
+                state.persistenceWarningShown = true;
+                showToast('Could not persist document data for offline storage. Your session will still work, but reloads may require re-upload.', 'info', 6000);
+            }
+            return null;
+        }
+        console.warn(`Unexpected persistence error for ${label}:`, e);
+        if (!state.persistenceWarningShown) {
+            state.persistenceWarningShown = true;
+            showToast('Persistence failed due to a storage error. Your current session should still work.', 'info', 6000);
+        }
         return null;
     }
 }
@@ -144,6 +180,38 @@ const majorRiversGeoJSON = {
     ]
 };
 
+function mapHasSize(mapInstance) {
+    if (!mapInstance || !mapInstance.getSize) return false;
+    const size = mapInstance.getSize();
+    return size && size.x > 0 && size.y > 0;
+}
+
+function buildHeatLayer(heatPoints, mapInstance) {
+    if (!mapHasSize(mapInstance)) {
+        if (!state.heatmapWarningShown) {
+            state.heatmapWarningShown = true;
+            showToast('Focus layer is waiting for the map to finish rendering.', 'info', 4000);
+        }
+        return L.layerGroup();
+    }
+    try {
+        return L.heatLayer(heatPoints, {
+            radius: 40,
+            blur: 25,
+            maxZoom: 10,
+            max: 1.0,
+            gradient: { 0.2: '#3b82f6', 0.5: '#8b5cf6', 0.8: '#ec4899', 1: '#f43f5e' }
+        });
+    } catch (e) {
+        console.warn('Heatmap initialization failed:', e);
+        if (!state.heatmapWarningShown) {
+            state.heatmapWarningShown = true;
+            showToast('Focus layer failed to initialize on this map view.', 'info', 4000);
+        }
+        return L.layerGroup();
+    }
+}
+
 // Historian Overlay Layers - meaningful overlays with real analytical value
 const overlayLayerDefs = {
     rivers: {
@@ -169,7 +237,7 @@ const overlayLayerDefs = {
     population: {
         name: "Narrative Focus",
         // Heatmap showing intensity of location mentions in the text
-        layer: () => {
+        layer: (mapInstance) => {
             // Count mentions per location, trying multiple name forms
             const mentionCounts = {};
             state.allLocations.forEach(loc => {
@@ -196,13 +264,7 @@ const overlayLayerDefs = {
                 const intensity = 0.3 + (l.count / maxMentions) * 0.7;
                 return [l.coords[0], l.coords[1], intensity];
             });
-            group.addLayer(L.heatLayer(heatPoints, {
-                radius: 40,
-                blur: 25,
-                maxZoom: 10,
-                max: 1.0,
-                gradient: { 0.2: '#3b82f6', 0.5: '#8b5cf6', 0.8: '#ec4899', 1: '#f43f5e' }
-            }));
+            group.addLayer(buildHeatLayer(heatPoints, mapInstance));
             // Add small labeled markers so users see what locations are represented
             resolvedLocations.forEach(l => {
                 const radius = 4 + Math.min((l.count / maxMentions) * 12, 12);
@@ -1143,13 +1205,13 @@ function toggleOverlayLayer(layerName) {
         // Enable layer
         tracking.active = true;
         if (state.map) {
-            const l = def.layer();
+            const l = def.layer(state.map);
             if (l.setZIndex) l.setZIndex(10);
             l.addTo(state.map);
             tracking.main = l;
         }
         if (state.inlineMap) {
-            const l = def.layer();
+            const l = def.layer(state.inlineMap);
             if (l.setZIndex) l.setZIndex(10);
             l.addTo(state.inlineMap);
             tracking.inline = l;
@@ -1853,6 +1915,11 @@ function showDisambiguationModal(locationName, entity, badgeElement) {
     const question = document.getElementById('disambiguationQuestion');
     const optionsContainer = document.getElementById('disambiguationOptions');
 
+    if (state.disambiguationTimer) {
+        clearTimeout(state.disambiguationTimer);
+        state.disambiguationTimer = null;
+    }
+
     // Set question text
     question.textContent = `We found "${locationName}" in your document, but it could refer to multiple places. Which one did you mean?`;
 
@@ -1863,6 +1930,8 @@ function showDisambiguationModal(locationName, entity, badgeElement) {
     entity.disambiguationOptions.forEach((option, index) => {
         const optionBtn = document.createElement('button');
         optionBtn.className = 'disambiguation-option';
+        optionBtn.type = 'button';
+        optionBtn.dataset.optionIndex = index.toString();
 
         const label = document.createElement('div');
         label.className = 'option-label';
@@ -1876,10 +1945,16 @@ function showDisambiguationModal(locationName, entity, badgeElement) {
         optionBtn.appendChild(keywords);
 
         // Click handler for option selection
-        optionBtn.onclick = () => {
+        const handleOptionSelection = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (optionBtn.dataset.selected === 'true') return;
+            optionBtn.dataset.selected = 'true';
             selectDisambiguationOption(locationName, option, badgeElement, entity);
             closeDisambiguationModal();
         };
+        optionBtn.addEventListener('click', handleOptionSelection);
+        optionBtn.addEventListener('pointerup', handleOptionSelection);
 
         optionsContainer.appendChild(optionBtn);
     });
@@ -1887,6 +1962,16 @@ function showDisambiguationModal(locationName, entity, badgeElement) {
     // Show modal
     modal.classList.add('open');
     state.disambiguationModalOpen = true;
+
+    state.disambiguationTimer = setTimeout(() => {
+        if (!state.disambiguationModalOpen) return;
+        const fallback = entity.disambiguationOptions[0];
+        if (fallback) {
+            showToast('No selection made. Defaulting to the first match.', 'info', 4000);
+            selectDisambiguationOption(locationName, fallback, badgeElement, entity);
+        }
+        closeDisambiguationModal();
+    }, 30000);
 }
 
 // Close disambiguation modal
@@ -1894,6 +1979,10 @@ function closeDisambiguationModal() {
     const modal = document.getElementById('disambiguationModal');
     modal.classList.remove('open');
     state.disambiguationModalOpen = false;
+    if (state.disambiguationTimer) {
+        clearTimeout(state.disambiguationTimer);
+        state.disambiguationTimer = null;
+    }
 }
 
 // Select a disambiguation option and remember it
@@ -2500,7 +2589,7 @@ async function loadPDF(fileOrBlob, fileName = 'Document') {
         // Save to library
         await saveToLibrary(state.documentHash, fileName, 'pdf', arrayBuffer);
 
-        localforage.setItem("cachedDocument", arrayBuffer);
+        await persistArrayBuffer(localforage, "cachedDocument", arrayBuffer, "cached PDF");
         localforage.setItem("cachedDocumentType", 'pdf');
         localforage.setItem("cachedDocumentName", fileName);
     } catch (e) {
@@ -2537,7 +2626,7 @@ async function loadEPUB(fileOrBlob, fileName = 'Document') {
         // Save to library
         await saveToLibrary(state.documentHash, fileName, 'epub', arrayBuffer);
 
-        localforage.setItem("cachedDocument", arrayBuffer);
+        await persistArrayBuffer(localforage, "cachedDocument", arrayBuffer, "cached EPUB");
         localforage.setItem("cachedDocumentType", 'epub');
         localforage.setItem("cachedDocumentName", fileName);
     } catch (e) {
@@ -2725,8 +2814,11 @@ async function saveToLibrary(hash, name, type, arrayBuffer) {
 
         // Only store file data if under size limit
         if (fileSize <= MAX_LIBRARY_FILE_SIZE) {
-            await libraryDB.setItem(`doc_${hash}`, arrayBuffer);
-            entry.stored = true;
+            const stored = await persistArrayBuffer(libraryDB, `doc_${hash}`, arrayBuffer, `library ${name}`);
+            entry.stored = Boolean(stored);
+            if (!stored) {
+                showToast('Library storage skipped for this document. You can still read it now, but it will not be cached.', 'info', 5000);
+            }
         } else {
             showToast(`Large file - metadata saved but file not stored in library`, 'info', 3000);
         }
